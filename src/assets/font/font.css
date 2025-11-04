@@ -1,0 +1,33 @@
+
+@font-face {
+    font-family: CoinbaseSans;
+    src: url("CoinbaseSans.woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: CoinbaseDisplay;
+    src: url("CoinbaseDisplay.woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: CoinbaseSansBlob;
+    src: url("CoinbaseDisplayMedium.woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: Rubik;
+    src: url("CoinbaseDisplay.woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
