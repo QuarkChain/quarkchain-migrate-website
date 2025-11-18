@@ -90,6 +90,10 @@ function formatAmount(val) {
 }
 
 function show({ amount: amt, balance: bal, account: acc, conversion: conv, oldToken: old, l2Rpc: rpc }) {
+	steps.value = 1;
+	isFinish.value = false;
+	loading.value = 0;
+
 	amount.value = amt;
 	balance.value = bal;
 	account.value = acc;
@@ -109,7 +113,7 @@ async function loadData() {
 async function clickApprove() {
 	loading.value = 1;
 	try {
-		await approveErc20(oldToken.value, conversion.value);
+		await approveErc20(oldToken.value, conversion.value, amount.value);
 		const allowance = await getErc20Allowance(oldToken.value, account.value, conversion.value);
 		if (allowance >= formatAmount(amount.value)) {
 			steps.value = 2;

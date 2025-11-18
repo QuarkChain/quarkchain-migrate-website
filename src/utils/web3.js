@@ -10,8 +10,6 @@ const CONVERT_ABI = [
     "function convert(uint256 _amount) external",
 ];
 
-const MAX_UINT = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-
 function isSystemSender(address) {
     return address?.toLowerCase().startsWith("0xdeaddeaddeaddeaddeaddeaddeaddead");
 }
@@ -33,11 +31,11 @@ export async function getL2QKCBalance(rpc, userAddress) {
     return await provider.getBalance(userAddress);
 }
 
-export async function approveErc20(tokenAddress, convertAddress) {
+export async function approveErc20(tokenAddress, convertAddress, amount) {
     const provider = new ethers.BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     const contract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
-    const tx = await contract.approve(convertAddress, MAX_UINT);
+    const tx = await contract.approve(convertAddress, ethers.parseEther(amount));
     return await tx.wait();
 }
 
