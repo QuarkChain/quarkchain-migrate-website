@@ -3,7 +3,7 @@ import store from '@/store';
 import { chains } from '@/store/state';
 import { ElMessage } from 'element-plus';
 
-const targetChain = 11155111;
+const targetChain = 1;
 const chainID = `0x${targetChain.toString(16)}`;
 
 export async function connectWallet() {
