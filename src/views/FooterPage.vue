@@ -29,7 +29,7 @@ function goDiscord() {
 
 function goEtherscan() {
 	if (!Conversion.value) return
-	window.open(`https://sepolia.etherscan.io/address/${Conversion.value}#code`, "_blank")
+	window.open(`https://etherscan.io/address/${Conversion.value}#code`, "_blank")
 }
 </script>
 
