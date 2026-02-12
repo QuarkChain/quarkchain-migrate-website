@@ -1,11 +1,11 @@
 <template>
 	<div id="app">
-		<el-container>
+		<el-container class="full-height">
 			<el-header class="header">
 				<Header />
 			</el-header>
 
-			<el-main :style="{ minHeight: fullHeight - 90 - 82 + 'px' }">
+			<el-main class="main-content">
 				<router-view :key="$route.fullPath" />
 			</el-main>
 
@@ -15,30 +15,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
 import Header from '@/views/HeaderPage.vue'
 import Footer from '@/views/FooterPage.vue'
-
-const fullHeight = ref(document.documentElement.clientHeight)
-let timer = false
-
-const updateHeight = () => {
-	if (!timer) {
-		fullHeight.value = document.documentElement.clientHeight
-		timer = true
-		setTimeout(() => {
-			timer = false
-		}, 400)
-	}
-}
-
-onMounted(() => {
-	window.addEventListener('resize', updateHeight)
-})
-
-onBeforeUnmount(() => {
-	window.removeEventListener('resize', updateHeight)
-})
 </script>
 
 <style>
@@ -50,10 +28,21 @@ onBeforeUnmount(() => {
 	margin: 0 auto;
 }
 
+.full-height {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+}
+
 .header {
 	margin-top: 26px;
 	height: 64px !important;
 	padding: 5px 20px !important;
+}
+
+.main-content {
+	flex: 1;
+	overflow: auto;
 }
 
 @media screen and (max-width: 420px) {
@@ -61,6 +50,15 @@ onBeforeUnmount(() => {
 		margin-top: 10px;
 		height: 64px !important;
 		padding: 5px 15px !important;
+	}
+
+	.full-height {
+		min-height: auto;
+	}
+	.main-content {
+		flex: unset;
+		height: auto;
+		overflow: visible;
 	}
 }
 </style>

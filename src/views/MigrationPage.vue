@@ -1,6 +1,6 @@
 <template>
 	<div class="home-container">
-		<p class="home-title">QuarkChain Token Migration</p>
+		<p class="home-title">QKC Migration</p>
 		<div class="home-message">
 			To seamlessly integrate QuarkChain with Ethereum’s rollup infrastructure, the original ERC-20 QKC token (L1)
 			needs to be migrated to a new native token (L2) at a 1:1 ratio.
@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
 <style scoped lang="less">
 .home-container {
 	width: 750px;
-	margin: 35px auto;
+	margin: 45px auto 0;
 	padding: 25px;
 }
 
