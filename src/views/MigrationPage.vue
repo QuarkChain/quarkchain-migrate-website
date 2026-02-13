@@ -164,40 +164,42 @@ onBeforeUnmount(() => {
 
 <style scoped lang="less">
 .home-container {
-	width: 750px;
-	margin: 45px auto 0;
-	padding: 25px;
+	width: 700px;
+	margin: 50px auto 0;
+	padding: 30px;
 }
 
 .home-message {
 	font-style: normal;
-	font-weight: 300;
-	font-size: 17px;
-	line-height: 19px;
-	color: #1722a2;
-	opacity: 0.7;
+	font-weight: 400;
+	font-size: 18px;
+	line-height: 24px;
+	color: #181ea9;
+	opacity: 0.8;
 	text-align: left;
 	font-family: CoinbaseSans;
 }
 
 .home-convert {
-	margin-top: 45px;
-	padding: 25px 30px;
-	border: 1px solid rgba(24, 30, 169, 0.3);
-	border-radius: 8px;
+	margin-top: 30px;
+	padding: 30px 25px;
+	border: 1px solid rgba(24, 30, 169, 0.15);
+	border-radius: 12px;
+	background: #fff;
 
 	.row-layout {
 		display: flex;
 		flex-direction: row;
 		justify-content: space-between;
 		align-items: center;
-		gap: 25px;
+		gap: 20px;
 	}
 
 	.convert-title {
-		color: rgb(23, 34, 162);
-		font-size: 14px;
-		line-height: 14px;
+		color: #181ea9;
+		font-size: 15px;
+		line-height: 20px;
+		font-weight: 500;
 		font-family: CoinbaseSansBlob;
 	}
 
@@ -205,17 +207,17 @@ onBeforeUnmount(() => {
 		flex: 1;
 	}
 	.convert-input ::v-deep .el-input__inner {
-		color: rgb(24, 30, 169);
-		font-size: 14px;
-		line-height: 14px;
-		border-color: rgba(24, 30, 169, 0.3);
+		color: #1a1a1a;
+		font-size: 16px;
+		line-height: 20px;
+		border-color: rgba(24, 30, 169, 0.2);
 		font-family: CoinbaseDisplay;
 	}
 	.convert-input ::v-deep .el-input-group__append {
 		background-color: transparent;
-		color: rgb(24, 30, 169);
-		font-weight: 500;
-		border-color: rgba(24, 30, 169, 0.3);
+		color: #181ea9;
+		font-weight: 600;
+		border-color: rgba(24, 30, 169, 0.2);
 		font-family: CoinbaseDisplay;
 	}
 	:deep(input[type="number"]::-webkit-outer-spin-button),
@@ -227,17 +229,20 @@ onBeforeUnmount(() => {
 
 	.convert-button {
 		cursor: pointer;
-		width: 20%;
-		background: rgb(24, 30, 169);
+		width: auto;
+		background: #181ea9;
 		border: none;
-		font-size: 14px;
-		line-height: 14px;
+		font-size: 15px;
+		line-height: 20px;
 		color: rgb(255, 255, 255);
-		border-radius: 4px;
+		border-radius: 24px;
 		font-family: CoinbaseSansBlob;
+		padding: 8px 16px;
+		transition: all 0.3s ease;
 	}
 	.convert-button:hover {
-		background-color: rgba(24, 30, 169, 0.7);
+		background-color: #12168a;
+		box-shadow: 0 3px 10px rgba(24,30,169,0.25);
 		border: 0;
 	}
 	.convert-button:disabled {
@@ -248,66 +253,67 @@ onBeforeUnmount(() => {
 
 	.convert-note {
 		font-style: normal;
-		font-size: 12px;
+		font-size: 13px;
 		line-height: 1.5;
-		color: red;
-		width: 85%;
-		margin: 15px auto 0;
+		color: #e63946;
+		width: 100%;
+		margin: 20px 0 0;
 		font-family: CoinbaseDisplay;
+		text-align: left;
 	}
 }
 
 
 .show-more {
 	font-size: 18px;
-	color: rgb(24, 30, 169);
+	color: #181ea9;
 	text-align: left;
-	margin: 38px 0 15px;
+	margin: 30px 0 15px;
 	font-family: CoinbaseSansBlob;
 }
 
 .convert-detail {
-	border: 1px solid rgba(24, 30, 169, 0.3);
-	border-radius: 8px;
-	padding: 25px 30px;
+	border: 1px solid rgba(24, 30, 169, 0.15);
+	border-radius: 12px;
+	padding: 30px 25px;
+	background: #fff;
 
 	.row-layout {
 		display: flex;
 		flex-direction: row;
 		justify-content: space-between;
 		align-items: center;
-		gap: 25px;
+		gap: 20px;
 	}
 
 	.detail-margin {
-		margin-top: 15px;
+		margin-top: 18px;
 	}
 
 	.detail-title {
 		font-style: normal;
-		line-height: 18px;
-		color: rgb(24, 30, 169);
-		font-size: 13px;
+		line-height: 20px;
+		color: #666666;
+		font-size: 14px;
 		font-weight: 500;
-		opacity: 0.8;
 		font-family: CoinbaseSans;
 	}
 
 	.detail-value {
 		font-style: normal;
-		line-height: 18px;
-		font-size: 13px;
+		line-height: 20px;
+		font-size: 14px;
 		font-weight: 400;
 		font-family: CoinbaseSans;
 	}
 	.convert-value-old {
-		color: #F4A261;
+		color: #e67e22;
 	}
 	.convert-value-new {
-		color: #3B4BFF;
+		color: #181ea9;
 	}
 	.convert-value-address {
-		color: #666;
+		color: #666666;
 		font-family: "Roboto Mono", monospace;
 	}
 }
@@ -323,69 +329,65 @@ onBeforeUnmount(() => {
 @media screen and (max-width: 500px) {
 	.home-container {
 		width: 95%;
-		margin: 20px auto;
-		padding: 0;
+		margin: 30px auto 0;
+		padding: 0 20px;
 	}
 
-	.home-title {
-		font-size: 20px;
-		margin-bottom: 15px;
-	}
 	.home-message {
-		font-size: 13px;
+		font-size: 15px;
+		line-height: 20px;
 	}
 
 	.home-convert {
-		padding: 15px;
+		padding: 20px;
 
 		.row-layout {
-			gap: 8px;
+			gap: 12px;
 		}
 
 		.convert-title {
-			font-size: 12px;
-			line-height: 16px;
-			width: 20%;
+			font-size: 14px;
+			line-height: 18px;
+			width: auto;
 		}
 
 		.convert-input {
 			flex: 1;
 		}
 		.convert-input ::v-deep .el-input__inner {
-			font-size: 12px;
-			line-height: 12px;
+			font-size: 14px;
+			line-height: 18px;
 		}
 		.convert-input ::v-deep .el-input-group__append {
-			font-size: 12px;
-			line-height: 12px;
+			font-size: 14px;
+			line-height: 18px;
 			padding-left: 8px;
 			padding-right: 8px;
-			font-weight: 400;
+			font-weight: 500;
 		}
 
 
 		.convert-button {
-			width: 20%;
-			font-size: 12px;
-			line-height: 12px;
-			padding-left: 0px;
-			padding-right: 0px;
+			width: auto;
+			font-size: 14px;
+			line-height: 18px;
+			padding: 6px 12px;
 		}
 
 		.convert-note {
-			width: 90%;
-			margin: 15px auto 0;
+			width: 100%;
+			margin: 15px 0 0;
 		}
 	}
 
 
 	.show-more {
-		font-size: 15px;
-		margin: 40px 0 15px;
+		font-size: 16px;
+		margin: 30px 0 15px;
 	}
 
 	.convert-detail {
-		padding: 15px;
+		padding: 20px;
 	}
 }
 </style>

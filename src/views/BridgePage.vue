@@ -1,7 +1,7 @@
 <template>
 	<div class="bridge-container">
 		<p class="bridge-message">
-			Bridge tokens between Ethereum and QuarkChain L2
+			Bridge assets between Ethereum and QuarkChain L2 securely and seamlessly.
 		</p>
 
 		<div class="bridge-header">
@@ -89,8 +89,7 @@ import quarkIcon from '@/assets/quarkchain.svg'
 import usdcIcon from '@/assets/usdc.png'
 
 const tokens = [
-	{ label: 'USDC', value: 'USDC', icon: usdcIcon },
-	{ label: 'USDT', value: 'USDT', icon: usdcIcon }
+	{ label: 'USDC', value: 'USDC', icon: usdcIcon }
 ]
 
 const pendingCount = ref(1)
@@ -124,18 +123,17 @@ function setMax() {
 
 <style scoped lang="less">
 .bridge-container {
-	width: 650px;
-	margin: 45px auto 0;
-	padding: 25px;
+	width: 700px;
+	margin: 50px auto 0;
+	padding: 30px;
 }
 
 .bridge-message {
 	font-style: normal;
-	font-weight: 300;
-	font-size: 17px;
-	line-height: 19px;
-	color: #1722b2;
-	opacity: 0.7;
+	font-weight: 500;
+	font-size: 18px;
+	line-height: 22px;
+	color: #181ea9;
 	text-align: left;
 	font-family: CoinbaseSans;
 }
@@ -148,15 +146,17 @@ function setMax() {
 
 	.header-actions {
 		display: flex;
-		gap: 8px;
+		gap: 12px;
 	}
 }
 
 .bridge-card {
-	margin-top: 16px;
-	padding: 25px 20px;
-	border: 1px solid rgba(24, 30, 169, 0.3);
-	border-radius: 8px;
+	margin-top: 20px;
+	padding: 30px 25px;
+	border: 1px solid rgba(24, 30, 169, 0.15);
+	border-radius: 12px;
+	background: #fff;
+	box-shadow: 0 4px 16px rgba(24, 30, 169, 0.06);
 
 	.network-row {
 		display: flex;
@@ -167,40 +167,45 @@ function setMax() {
 			flex: 1;
 			border: 1px solid rgba(24, 30, 169, 0.1);
 			background: #FAFCFF;
-			padding: 16px;
+			padding: 18px 20px;
 			border-radius: 12px;
 			cursor: pointer;
 			display: flex;
 			flex-direction: row;
 			align-items: center;
-			transition: box-shadow 0.2s ease;
+			transition: all 0.3s ease;
 
 			.network-icon {
-				width: 48px;
-				height: 48px;
-				padding: 3px;
-				border-radius: 18%;
+				width: 52px;
+				height: 52px;
+				padding: 4px;
+				border-radius: 20%;
 				object-fit: cover;
 			}
 
 			.text {
 				display: flex;
 				flex-direction: column;
-				line-height: 1.2;
+				line-height: 1.3;
 
 				.label {
 					font-size: 14px;
-					color: #909399;
+					color: #666666;
+					margin-bottom: 2px;
 				}
 				.value {
-					font-size: 16px;
-					color: rgb(24, 30, 169);
+					font-size: 17px;
+					color: #1a1a1a;
 					font-weight: 600;
+					transition: color 0.3s ease;
 				}
 			}
 		}
 		.network-box:hover {
-			box-shadow: 0 2px 6px rgba(24,30,169,0.15);
+			box-shadow: 0 2px 6px rgba(24, 30, 169, 0.1);
+			.text .value {
+				color: #181ea9;
+			}
 		}
 		.left {
 			justify-content: flex-start;
@@ -209,49 +214,53 @@ function setMax() {
 			justify-content: flex-end;
 		}
 		.network-box.left .text {
-			margin-left: 12px;
+			margin-left: 15px;
 			align-items: flex-start;
 			text-align: left;
 		}
 		.network-box.right .text {
-			margin-right: 12px;
+			margin-right: 15px;
 			align-items: flex-end;
 			text-align: right;
 		}
 
 		.switch-btn {
-			margin: 0 10px;
-			transition: box-shadow 0.2s ease;
+			margin: 0 12px;
+			background: #181ea9;
+			color: #fff;
+			border-color: #181ea9;
+			transition: all 0.3s ease;
 		}
 		.switch-btn:hover {
-			box-shadow: 0 2px 6px rgba(24,30,169,0.15);
-			background-color: inherit !important;
-			border-color: inherit !important;
-			color: rgba(24,30,169,0.5) !important;
+			box-shadow: 0 3px 10px rgba(24, 30, 169, 0.25);
+			background: #12168a;
+			border-color: #12168a;
+			color: #fff;
 		}
 	}
 
 
 	.amount-box {
-		margin-top: 12px;
+		margin-top: 22px;
 		border: 1px solid rgba(24, 30, 169, 0.1);
 		background: #FAFCFF;
-		padding: 16px;
+		padding: 20px;
 		border-radius: 12px;
 
 		.token-option {
 			display: flex;
 			align-items: center;
-			gap: 8px;
+			gap: 10px;
 
 			.token-icon {
-				width: 20px;
-				height: 20px;
+				width: 22px;
+				height: 22px;
 				border-radius: 50%;
 				object-fit: cover;
 			}
 			.token-text {
-				color: #000;
+				color: #1a1a1a;
+				font-weight: 500;
 				font-family: CoinbaseDisplay;
 			}
 		}
@@ -259,34 +268,39 @@ function setMax() {
 		.balance-row {
 			display: flex;
 			justify-content: space-between;
-			margin-top: 16px;
-			font-size: 13px;
-			color: #71717a;
+			margin-top: 18px;
+			font-size: 14px;
+			color: #666666;
 
 			.max-btn {
-				background: #fff;
-				border: 1px solid rgba(24, 30, 169, 0.1);
-				border-radius: 20px;
-				padding: 4px 12px;
-				font-size: 12px;
+				background: #181ea9;
+				border: none;
+				border-radius: 24px;
+				padding: 6px 16px;
+				font-size: 13px;
 				font-weight: 600;
-				color: #181EA9;
-				transition: box-shadow 0.2s ease;
+				color: #fff;
+				transition: all 0.3s ease;
 			}
 			.max-btn:hover {
-				box-shadow: 0 2px 6px rgba(24,30,169,0.15);
+				box-shadow: 0 3px 10px rgba(24, 30, 169, 0.25);
+				background: #12168a;
+				color: #fff;
 			}
 		}
 	}
+
 	:deep(.amount-input .el-input__wrapper) {
 		box-shadow: none !important;
 		background: transparent !important;
-		padding: 0;
+		padding: 0 4px;
+		border: none;
 	}
+
 	:deep(.amount-input input) {
-		font-size: 26px;
+		font-size: 28px;
 		font-weight: 600;
-		color: #000;
+		color: #1a1a1a;
 		font-family: CoinbaseSansBlob;
 	}
 	:deep(input[type="number"]::-webkit-outer-spin-button),
@@ -302,13 +316,18 @@ function setMax() {
 	}
 	:deep(.token-select .el-select__wrapper) {
 		background: #fff !important;
-		border-radius: 18px !important;
-		border: 1px solid rgba(24, 30, 169, 0.3) !important;
+		border-radius: 20px !important;
+		border: 1px solid rgba(24, 30, 169, 0.2) !important;
 		box-shadow: none !important;
-		padding: 0 12px !important;
-		min-height: 36px;
+		padding: 0 14px !important;
+		min-height: 40px;
 		display: flex;
 		align-items: center;
+		transition: border-color 0.3s ease;
+	}
+
+	:deep(.token-select .el-select__wrapper:hover) {
+		border-color: #181ea9 !important;
 	}
 }
 </style>

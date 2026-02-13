@@ -8,10 +8,10 @@
 
 		<template #start>
 			<b-navbar-item tag="router-link" to="/migration">
-				<span style="margin: 0 10px 0 20px">QKC Migration</span>
+				<span class="nav-text">QKC Migration</span>
 			</b-navbar-item>
 			<b-navbar-item tag="router-link" to="/bridge">
-				Bridge
+				<span class="nav-text">Bridge</span>
 			</b-navbar-item>
 		</template>
 
@@ -29,10 +29,10 @@ import Wallet from "@/components/Wallet.vue"
 
 <style lang="less">
 .nav-container {
-  margin: 0 auto;
-  max-width: 1400px;
-  height: 64px;
-  background: transparent !important;
+	margin: 0 auto;
+	max-width: 1440px;
+	height: 70px;
+	background: transparent !important;
 
 	.navbar-item {
 		font-weight: 400;
@@ -41,18 +41,14 @@ import Wallet from "@/components/Wallet.vue"
 		font-family: CoinbaseSans;
 		background-color: transparent !important;
 	}
-	.navbar-item:hover {
-		background-color: transparent !important;
-	}
-	.navbar-item:focus {
-		background-color: transparent !important;
-	}
+	.navbar-item:hover,
+	.navbar-item:focus,
 	.navbar-item:active {
 		background-color: transparent !important;
 	}
 
 	.navbar-start .navbar-item {
-		transition: all 0.2s ease;
+		transition: all 0.3s ease;
 	}
 	.navbar-start .navbar-item:hover {
 		background-color: transparent !important;
@@ -63,29 +59,31 @@ import Wallet from "@/components/Wallet.vue"
 
 	.router-link-exact-active {
 		color: #181ea9;
+		font-weight: 500;
 	}
 }
 
 .connection {
-  cursor: default !important;
+	cursor: default !important;
 }
-
 .connection:hover {
-  background-color: transparent !important;
+	background-color: transparent !important;
 }
 
 .logo {
-  min-height: 36px;
-  max-height: 36px;
+	min-height: 40px;
+	max-height: 40px;
+	padding: 2px 0;
 }
 
 @media screen and (max-width: 420px) {
-  .logo {
-    min-height: 25px;
-  }
-  .navbar-menu {
-    background: #F9F8FD;
-    border-radius: 10px;
-  }
+	.logo {
+		min-height: 30px;
+		max-height: 30px;
+	}
+	.navbar-menu {
+		background: #F9F8FD;
+		border-radius: 12px;
+	}
 }
 </style>
