@@ -1,10 +1,18 @@
 // src/utils/walletManager.js
 import store from '@/store';
-import { chains } from '@/store/state';
 import { ElMessage } from 'element-plus';
 
-const targetChain = 1;
-const chainID = `0x${targetChain.toString(16)}`;
+const getTargetL1 = () => store.state.activeEnvId;
+
+export function initWalletEvents() {
+    if (!window.ethereum) return;
+    window.ethereum.on("accountsChanged", async (accounts) => {
+        await store.dispatch('setAccount', accounts[0] || null)
+    });
+    window.ethereum.on("chainChanged", async (chainId) => {
+        await store.dispatch('setChainId', chainId)
+    });
+}
 
 export async function connectWallet() {
     if (!window.ethereum) {
@@ -13,52 +21,50 @@ export async function connectWallet() {
     }
 
     try {
+        const targetId = getTargetL1();
         const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
-        if (currentChainId !== chainID) {
+        if (currentChainId !== targetId) {
             await window.ethereum.request({
                 method: 'wallet_switchEthereumChain',
-                params: [{ chainId: chainID }],
+                params: [{ chainId: targetId }],
             });
         }
         const accounts = await window.ethereum.request({
             method: 'eth_requestAccounts',
         });
 
-        await handleAccountsChanged(accounts);
-        await handleChainChanged();
+        await store.dispatch('setAccount', accounts[0] || null)
+        await store.dispatch('setChainId', targetId);
     } catch (error) {
         if (error.code === 4001) {
-            ElMessage.error('User rejected wallet connection');
+            ElMessage.error('User rejected');
         } else {
             ElMessage.error('Connection Error: ' + error.message);
         }
     }
 }
 
-export function initWalletEvents() {
+export async function ensureNetwork(targetHexId, params) {
     if (!window.ethereum) return;
-    window.ethereum.on("accountsChanged", handleAccountsChanged);
-    window.ethereum.on("chainChanged", handleChainChanged);
-}
 
-async function handleAccountsChanged(accounts) {
-    if (accounts.length === 0) {
-        await store.dispatch('setAccount', null);
-        console.warn("No account connected");
-        return;
-    }
-    await store.dispatch('setAccount', accounts[0]);
-}
-
-async function handleChainChanged() {
-    const newChainId = await window.ethereum.request({ method: "eth_chainId" });
-    if (chainID !== newChainId) {
-        await store.dispatch('setAccount', null);
-        await store.dispatch('setChainConfig', {});
-    } else {
-        const config = chains.find(v => v.chainID === chainID);
-        if (config) {
-            await store.dispatch('setChainConfig', JSON.parse(JSON.stringify(config)));
+    const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+    if (currentChainId.toLowerCase() !== targetHexId.toLowerCase()) {
+        try {
+            await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: targetHexId }],
+            });
+        } catch (error) {
+            if (error.code === 4902) {
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [params]
+                })
+            } else {
+                ElMessage.error('Switch network failed: ' + error.message);
+                return false;
+            }
         }
     }
+    return true;
 }

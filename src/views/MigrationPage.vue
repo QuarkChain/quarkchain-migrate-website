@@ -1,12 +1,11 @@
 <template>
 	<div class="home-container">
-		<p class="home-title">QKC Migration</p>
 		<div class="home-message">
 			To seamlessly integrate QuarkChain with Ethereum’s rollup infrastructure, the original ERC-20 QKC token (L1)
 			needs to be migrated to a new native token (L2) at a 1:1 ratio.
 		</div>
 
-		<div class="home-convert">
+		<el-card class="home-convert">
 			<div class="row-layout">
 				<p class="convert-title">Amount to Migrate:</p>
 
@@ -31,10 +30,10 @@
 			<p class="convert-note">
 				⚠️ Note: This is a one-way migration. Once your QKC is migrated, it cannot be transferred back.
 			</p>
-		</div>
+		</el-card>
 
 		<p class="show-more">My Balance</p>
-		<div class="convert-detail">
+		<el-card class="convert-detail">
 			<div class="row-layout">
 				<p class="detail-title">QKC (L1):</p>
 				<div class="detail-value convert-value-old">{{ oldBalStr }} QKC</div>
@@ -47,7 +46,7 @@
 				<p class="detail-title">Address:</p>
 				<div class="convert-value convert-value-address">{{ accountStr }}</div>
 			</div>
-		</div>
+		</el-card>
 
 		<cross-chain-dialog ref="progressDialog" @finish="onFinish" />
 	</div>
@@ -69,9 +68,9 @@ const isFetching = ref(false)
 const input = ref('')
 
 const account = computed(() => store.state.account)
-const Conversion = computed(() => store.state.chainConfig?.Conversion || null)
-const OldToken = computed(() => store.state.chainConfig?.OldToken || null)
-const L2Rpc = computed(() => store.state.chainConfig?.L2Rpc || null)
+const Conversion = computed(() => store.getters.Conversion);
+const OldToken = computed(() => store.getters.OldToken);
+const L2Rpc = computed(() => store.getters.L2Rpc);
 
 const oldBalStr = computed(() => {
 	if (account.value) {
@@ -170,21 +169,10 @@ onBeforeUnmount(() => {
 	padding: 25px;
 }
 
-.home-title {
-	font-weight: 400;
-	font-size: 24px;
-	line-height: 15px;
-	letter-spacing: 2px;
-	margin: 0 auto 25px;
-	color: #181ea9;
-	font-family: CoinbaseSansBlob;
-}
-
-
 .home-message {
 	font-style: normal;
 	font-weight: 300;
-	font-size: 15px;
+	font-size: 17px;
 	line-height: 19px;
 	color: #1722a2;
 	opacity: 0.7;
@@ -196,6 +184,7 @@ onBeforeUnmount(() => {
 	margin-top: 45px;
 	padding: 25px 30px;
 	border: 1px solid rgba(24, 30, 169, 0.3);
+	border-radius: 8px;
 
 	.row-layout {
 		display: flex;
@@ -274,6 +263,7 @@ onBeforeUnmount(() => {
 
 .convert-detail {
 	border: 1px solid rgba(24, 30, 169, 0.3);
+	border-radius: 8px;
 	padding: 25px 30px;
 
 	.row-layout {

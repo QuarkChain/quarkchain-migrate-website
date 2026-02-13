@@ -1,29 +1,28 @@
 import { createStore } from 'vuex';
+import { chains } from './state';
 
-const store = createStore({
+export default createStore({
   state() {
     return {
-      chainConfig: {},
+      activeEnvId: import.meta.env.TARGET_L1_CHAIN_ID || '0xaa36a7',
       account: '',
+      chainId: '',
     };
   },
+  getters: {
+    currentConfig: (state) => {
+      return chains.find(v => v.chainID === state.activeEnvId) || {};
+    },
+    Conversion: (state, getters) => getters.currentConfig.Conversion || null,
+    OldToken: (state, getters) => getters.currentConfig.OldToken || null,
+    L2Rpc: (state, getters) => getters.currentConfig.L2Rpc || null,
+  },
   mutations: {
-    chainMutation(state, payload) {
-      state.chainConfig = payload;
-    },
-    accountMutation(state, payload) {
-      state.account = payload;
-    },
+    SET_ACCOUNT: (state, p) => state.account = p,
+    SET_CHAIN: (state, id) => state.chainId = id,
   },
   actions: {
-    setChainConfig({ commit }, payload) {
-      commit('chainMutation', payload);
-    },
-    setAccount({ commit }, payload) {
-      commit('accountMutation', payload);
-    },
-  },
-  modules: {},
+    setAccount({ commit }, p) { commit('SET_ACCOUNT', p); },
+    setChainId({ commit }, id) { commit('SET_CHAIN', id); },
+  }
 });
-
-export default store;
