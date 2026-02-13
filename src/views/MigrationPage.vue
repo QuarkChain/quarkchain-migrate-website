@@ -218,6 +218,11 @@ onBeforeUnmount(() => {
 		border-color: rgba(24, 30, 169, 0.3);
 		font-family: CoinbaseDisplay;
 	}
+	:deep(input[type="number"]::-webkit-outer-spin-button),
+	:deep(input[type="number"]::-webkit-inner-spin-button) {
+		-webkit-appearance: none;
+		margin: 0;
+	}
 
 
 	.convert-button {
