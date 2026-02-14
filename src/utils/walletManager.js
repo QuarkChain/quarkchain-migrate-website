@@ -60,6 +60,12 @@ export async function ensureNetwork(targetHexId, params) {
                     method: 'wallet_addEthereumChain',
                     params: [params]
                 })
+                //    params: [{
+                //                         chainId: network.chainId,
+                //                         chainName: network.name,
+                //                         rpcUrls: [network.rpc],
+                //                         // ...其他参数
+                //                     }],
             } else {
                 ElMessage.error('Switch network failed: ' + error.message);
                 return false;

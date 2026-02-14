@@ -1,14 +1,5 @@
 import { ethers } from "ethers";
-
-const ERC20_ABI = [
-    "function balanceOf(address owner) view returns (uint256)",
-    "function allowance(address owner, address spender) view returns (uint256)",
-    "function approve(address spender, uint256 amount) returns (bool)"
-];
-
-const CONVERT_ABI = [
-    "function convert(uint256 _amount) external",
-];
+import { ERC20_ABI, CONVERT_ABI } from "@/config/abi.js";
 
 function isSystemSender(address) {
     return address?.toLowerCase().startsWith("0xdeaddeaddeaddeaddeaddeaddeaddead");

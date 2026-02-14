@@ -19,10 +19,10 @@
 			<!-- Network Select -->
 			<div class="network-row">
 				<div class="network-box left" @click="switchNetwork">
-					<img class="network-icon" :src="getIcon(fromNetwork)" />
+					<img class="network-icon" :src="fromNetworkConfig.icon"  alt="network-from"/>
 					<div class="text">
 						<span class="label">From</span>
-						<span class="value">{{ fromNetwork }}</span>
+						<span class="value">{{ fromNetworkConfig.name }}</span>
 					</div>
 				</div>
 
@@ -33,39 +33,33 @@
 				<div class="network-box right" @click="switchNetwork">
 					<div class="text">
 						<span class="label">To</span>
-						<span class="value">{{ toNetwork }}</span>
+						<span class="value">{{ toNetworkConfig.name }}</span>
 					</div>
-					<img class="network-icon" :src="getIcon(toNetwork)" />
+					<img class="network-icon" :src="toNetworkConfig.icon" alt="network-to"/>
 				</div>
 			</div>
 
 			<!-- Amount -->
 			<div class="amount-box">
-				<el-input
-						v-model="amount"
-						placeholder="0"
-						size="large"
-						type="number"
-						class="amount-input"
-				>
+				<el-input v-model="amount" placeholder="0" type="number" class="amount-input">
 					<template #append>
-						<el-select v-model="token" class="token-select">
+						<el-select v-model="selectedTokenSymbol" class="token-select">
 							<template #prefix>
 								<div class="token-option">
-									<img :src="tokens.find(t => t.value === token).icon" class="token-icon" />
-									<span class="token-text">{{ token }}</span>
+									<img :src="TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol).icon" class="token-icon" />
+									<span class="token-text">{{ selectedTokenSymbol }}</span>
 								</div>
 							</template>
 
 							<el-option
-									v-for="item in tokens"
-									:key="item.value"
-									:label="item.label"
-									:value="item.value"
+									v-for="item in TOKEN_LIST"
+									:key="item.symbol"
+									:label="item.symbol"
+									:value="item.symbol"
 							>
 								<div style="display:flex; align-items: center; gap: 8px;">
-									<img :src="item.icon" style="width:20px; height:20px; border-radius:50%; object-fit: cover;" />
-									<span style="color: #000; font-family: CoinbaseSans;">{{ item.label }}</span>
+									<img :src="item.icon" style="width:20px; height:20px; border-radius:50%; object-fit: cover;"  alt="item-icon"/>
+									<span style="color: #000; font-family: CoinbaseSans;">{{ item.symbol }}</span>
 								</div>
 							</el-option>
 						</el-select>
@@ -73,51 +67,131 @@
 				</el-input>
 
 				<div class="balance-row">
-					<span>Balance: {{ balance }} {{ token }}</span>
-					<el-button class="max-btn" @click="setMax">MAX</el-button>
+					<div class="balance-info">
+						<span>Balance: </span>
+						<span v-if="isBalanceLoading" class="balance-loading">
+               <el-icon class="is-loading"><Loading /></el-icon>
+            </span>
+						<span v-else>{{ balance }} {{ selectedTokenSymbol }}</span>
+					</div>
+					<el-button size="small" link class="max-btn" @click="setMax">MAX</el-button>
 				</div>
+			</div>
+
+			<div class="bridge-button-row">
+				<el-button
+						:disabled="!isAmountValid || isBalanceLoading"
+						class="bridge-submit-btn"
+						type="primary"
+						@click="handleBridge"
+				>
+					{{ buttonText }}
+				</el-button>
 			</div>
 		</el-card>
 	</div>
 </template>
 
 <script setup>
-import { ref } from "vue"
-import { Refresh, Switch } from '@element-plus/icons-vue'
-import ethereumIcon from '@/assets/l1.svg'
-import quarkIcon from '@/assets/quarkchain.svg'
-import usdcIcon from '@/assets/usdc.png'
+import { ethers } from "ethers";
+import { ref, computed, watch } from "vue"
+import { Refresh, Switch, Loading } from '@element-plus/icons-vue'
+import { useStore } from 'vuex'
+import { TOKEN_LIST, NETWORKS } from "@/config/tokens"
+import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/utils/mutilWeb3.js";
 
-const tokens = [
-	{ label: 'USDC', value: 'USDC', icon: usdcIcon }
-]
+const store = useStore()
 
+// --- State ---
+// history
 const pendingCount = ref(1)
 
-const fromNetwork = ref('Ethereum')
-const toNetwork = ref('QuarkChain L2')
-
-const token = ref('USDC')
+// swap
 const amount = ref('')
-const balance = ref(19.89)
+const selectedTokenSymbol = ref(TOKEN_LIST[0].symbol)
+const isBalanceLoading = ref(false)
+const balance = ref('0.00')
 
-function switchNetwork() {
-	const temp = fromNetwork.value
-	fromNetwork.value = toNetwork.value
-	toNetwork.value = temp
+//（true  L1 -> L2, false L2 -> L1）
+const isL1ToL2 = ref(true)
+
+// --- Computed ---
+const activeEnvId = computed(() => store.state.activeEnvId)
+const fromNetworkConfig = computed(() => isL1ToL2.value ? NETWORKS.L1 : NETWORKS.L2)
+const toNetworkConfig = computed(() => isL1ToL2.value ? NETWORKS.L2 : NETWORKS.L1)
+const account = computed(() => store.state.account)
+const L2Rpc = computed(() => store.getters.L2Rpc);
+
+const currentTokenContract = computed(() => {
+	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value)
+	const chainId = isL1ToL2.value ? activeEnvId.value : (activeEnvId.value === '0x1' ? "0x186ab" : "0x1adbb")
+	return token?.networks[chainId] || null
+})
+
+const isAmountValid = computed(() => {
+	const val = parseFloat(amount.value)
+	return val > 0 && val <= parseFloat(balance.value)
+})
+
+const buttonText = computed(() => {
+	if (!amount.value || parseFloat(amount.value) === 0) return 'Enter Amount'
+	if (parseFloat(amount.value) > parseFloat(balance.value)) return 'Insufficient Balance'
+	return 'Transfer'
+})
+
+
+// --- Methods ---
+
+async function fetchBalance() {
+	if (!account.value) {
+		balance.value = '0.00'
+		return
+	}
+
+	isBalanceLoading.value = true
+	try {
+		let rawBalance;
+		const { address, decimals } = currentTokenContract.value;
+
+		if (isL1ToL2.value) {
+			rawBalance = await getErc20BalanceByL1(address, account.value);
+		} else {
+			rawBalance = await getErc20BalanceByL2(L2Rpc.value, address, account.value);
+		}
+
+		const formatted = ethers.formatUnits(rawBalance, decimals);
+		balance.value = parseFloat(formatted).toFixed(4);
+	} catch (e) {
+		console.error("Fetch balance failed", e)
+	} finally {
+		isBalanceLoading.value = false
+	}
 }
 
-function getIcon(name) {
-	const map = {
-		'Ethereum': ethereumIcon,
-		'QuarkChain L2': quarkIcon
-	}
-	return map[name]
+function switchNetwork() {
+	isL1ToL2.value = !isL1ToL2.value
+	amount.value = ''
 }
 
 function setMax() {
-	amount.value = balance.value.toString()
+	amount.value = balance.value
 }
+
+function handleBridge() {
+	console.log("Initiating bridge...", {
+		token: selectedTokenSymbol.value,
+		amount: amount.value,
+		from: fromNetworkConfig.value.name,
+		to: toNetworkConfig.value.name,
+		contract: currentTokenContract.value.address
+	})
+}
+
+// --- Watchers ---
+watch([selectedTokenSymbol, isL1ToL2, account], () => {
+	fetchBalance()
+}, { immediate: true })
+
 </script>
 
 
@@ -269,8 +343,11 @@ function setMax() {
 			display: flex;
 			justify-content: space-between;
 			margin-top: 18px;
-			font-size: 14px;
-			color: #666666;
+
+			.balance-info {
+				font-size: 14px;
+				color: #666666;
+			}
 
 			.max-btn {
 				background: #181ea9;
@@ -286,6 +363,42 @@ function setMax() {
 				box-shadow: 0 3px 10px rgba(24, 30, 169, 0.25);
 				background: #12168a;
 				color: #fff;
+			}
+		}
+	}
+
+	.bridge-button-row {
+		margin-top: 28px;
+		width: 100%;
+
+		.bridge-submit-btn {
+			width: 100%;
+			height: 54px;
+			background: #181ea9;
+			color: #fff;
+			border: none;
+			font-size: 17px;
+			font-weight: 600;
+			border-radius: 16px;
+			transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+			letter-spacing: 0.5px;
+			font-family: CoinbaseSans, sans-serif;
+
+			&:hover:not(:disabled) {
+				background: #12168a;
+				transform: translateY(-2px);
+				box-shadow: 0 8px 20px rgba(24, 30, 169, 0.25);
+			}
+
+			&:active:not(:disabled) {
+				transform: translateY(0);
+			}
+
+			&:disabled {
+				background: #f0f2f7;
+				color: #94a3b8;
+				cursor: not-allowed;
+				border: 1px solid rgba(24, 30, 169, 0.05);
 			}
 		}
 	}

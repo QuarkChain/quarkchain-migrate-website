@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import MigrationPage from '../views/MigrationPage.vue'
-import BridgePage from '../views/BridgePage.vue'
+import MigrationPage from '@/views/MigrationPage.vue'
+import BridgePage from '@/views/BridgePage.vue'
 
 const routes = [
   { path: '/', redirect: '/migration' },

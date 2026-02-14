@@ -1,5 +1,5 @@
 import { createStore } from 'vuex';
-import { chains } from './state';
+import { chains } from '@/config/chains.js';
 
 export default createStore({
   state() {
