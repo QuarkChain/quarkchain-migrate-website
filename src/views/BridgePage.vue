@@ -89,16 +89,20 @@
 				</el-button>
 			</div>
 		</el-card>
+
+		<bridge-dialog ref="progressDialog" @finish="onFinish" />
 	</div>
 </template>
 
 <script setup>
 import { ethers } from "ethers";
-import { ref, computed, watch } from "vue"
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue"
 import { Refresh, Switch, Loading } from '@element-plus/icons-vue'
 import { useStore } from 'vuex'
 import { TOKEN_LIST, NETWORKS } from "@/config/tokens"
 import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/utils/mutilWeb3.js";
+
+import BridgeDialog from '@/components/BridgeDialog.vue'
 
 const store = useStore()
 
@@ -116,11 +120,23 @@ const balance = ref('0.00')
 const isL1ToL2 = ref(true)
 
 // --- Computed ---
-const activeEnvId = computed(() => store.state.activeEnvId)
-const fromNetworkConfig = computed(() => isL1ToL2.value ? NETWORKS.L1 : NETWORKS.L2)
-const toNetworkConfig = computed(() => isL1ToL2.value ? NETWORKS.L2 : NETWORKS.L1)
-const account = computed(() => store.state.account)
+const activeEnvId = computed(() => store.state.activeEnvId);
+const fromNetworkConfig = computed(() =>
+		isL1ToL2.value
+				? NETWORKS.L1[activeEnvId.value === '0x1' ? 'mainnet': 'testnet']
+				: NETWORKS.L2[activeEnvId.value === '0x1' ? 'mainnet': 'testnet']
+);
+
+const toNetworkConfig = computed(() =>
+		isL1ToL2.value
+				? NETWORKS.L2[activeEnvId.value === '0x1' ? 'mainnet': 'testnet']
+				: NETWORKS.L1[activeEnvId.value === '0x1' ? 'mainnet': 'testnet']
+);
+const account = computed(() => store.state.account);
 const L2Rpc = computed(() => store.getters.L2Rpc);
+
+// bridge
+const progressDialog = ref(null)
 
 const currentTokenContract = computed(() => {
 	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value)
@@ -178,13 +194,27 @@ function setMax() {
 }
 
 function handleBridge() {
-	console.log("Initiating bridge...", {
-		token: selectedTokenSymbol.value,
+	// console.log("Initiating bridge...", {
+	// 	token: selectedTokenSymbol.value,
+	// 	amount: amount.value,
+	// 	from: fromNetworkConfig.value.name,
+	// 	to: toNetworkConfig.value.name,
+	// 	contract: currentTokenContract.value.address
+	// })
+	// TODO l2 to l1  l1 to l2
+
+	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value)
+	progressDialog.value.show({
+		fromNetwork: fromNetworkConfig.value,
+		toNetwork: toNetworkConfig.value,
+		token: token,
 		amount: amount.value,
-		from: fromNetworkConfig.value.name,
-		to: toNetworkConfig.value.name,
-		contract: currentTokenContract.value.address
+		account: account.value,
 	})
+}
+
+function onFinish() {
+	fetchBalance()
 }
 
 // --- Watchers ---
@@ -192,6 +222,15 @@ watch([selectedTokenSymbol, isL1ToL2, account], () => {
 	fetchBalance()
 }, { immediate: true })
 
+let timer
+onMounted(() => {
+	fetchBalance()
+	timer = setInterval(fetchBalance, 30000)
+})
+
+onBeforeUnmount(() => {
+	clearInterval(timer)
+})
 </script>
 
 

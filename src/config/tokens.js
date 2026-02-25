@@ -17,6 +17,33 @@ export const TOKEN_LIST = [
 ];
 
 export const NETWORKS = {
-	L1: { name: 'Ethereum', icon: ethereumIcon },
-	L2: { name: 'QuarkChain L2', icon: quarkIcon }
+	L1: {
+		mainnet: {
+			name: 'Ethereum',
+			icon: ethereumIcon,
+			chainId: '0x1',
+			explorer: 'https://etherscan.io/address/',
+		},
+		testnet: {
+			name: 'Sepolia',
+			icon: ethereumIcon,
+			chainId: '0xaa36a7',
+			explorer: 'https://sepolia.etherscan.io/address/',
+		},
+	},
+
+	L2: {
+		mainnet: {
+			name: 'QuarkChain L2',
+			icon: quarkIcon,
+			chainId: '0x186ab',
+			explorer: 'https://explorer.mainnet.l2.quarkchain.io/address/',
+		},
+		testnet: {
+			name: 'QuarkChain L2 Testnet',
+			icon: quarkIcon,
+			chainId: '0x1adbb',
+			explorer: 'https://explorer.delta.testnet.l2.quarkchain.io/address/',
+		},
+	},
 };
