@@ -62,7 +62,7 @@
 <script setup>
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { approveErc20, convert, getErc20Allowance, waitForL2Mint } from '@/utils/web3';
+import { approveErc20, convert, getErc20Allowance, waitForL2Mint } from '@/services/migration/nativeMigration.js';
 import { ethers } from 'ethers';
 
 import { ElIcon } from 'element-plus'

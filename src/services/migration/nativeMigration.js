@@ -1,38 +1,39 @@
 import { ethers } from "ethers";
-import { ERC20_ABI, CONVERT_ABI } from "@/config/abi.js";
+import { CONVERT_ABI } from "@/config/abi.js";
+import { getL1Provider, getL2Provider, getSigner } from "@/infra/provider/providerManager.js";
+import {getErc20Contract, getBalance, getAllowance, approve } from "@/infra/erc20/erc20.js";
+
+// query
+export async function getErc20Balance(tokenAddress, userAddress) {
+    const provider = getL1Provider();
+    const contract = getErc20Contract(tokenAddress, provider);
+    return getBalance(contract, userAddress);
+}
+
+export async function getErc20Allowance(tokenAddress, userAddress, convertAddress) {
+    const provider = getL1Provider();
+    const contract = getErc20Contract(tokenAddress, provider);
+    return getAllowance(contract, userAddress, convertAddress);
+}
+
+export async function getL2QKCBalance(rpc, userAddress) {
+    const provider = getL2Provider(rpc);
+    return provider.getBalance(userAddress);
+}
+
+// send
+export async function approveErc20(tokenAddress, convertAddress, amount) {
+    const signer = await getSigner();
+    const contract = getErc20Contract(tokenAddress, signer);
+    return approve(contract, convertAddress, ethers.parseEther(amount));
+}
 
 function isSystemSender(address) {
     return address?.toLowerCase().startsWith("0xdeaddeaddeaddeaddeaddeaddeaddead");
 }
 
-export async function getErc20Balance(tokenAddress, userAddress) {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-    return await contract.balanceOf(userAddress);
-}
-
-export async function getErc20Allowance(tokenAddress, userAddress, convertAddress) {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-    return await contract.allowance(userAddress, convertAddress);
-}
-
-export async function getL2QKCBalance(rpc, userAddress) {
-    const provider = new ethers.JsonRpcProvider(rpc);
-    return await provider.getBalance(userAddress);
-}
-
-export async function approveErc20(tokenAddress, convertAddress, amount) {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const contract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
-    const tx = await contract.approve(convertAddress, ethers.parseEther(amount));
-    return await tx.wait();
-}
-
 export async function convert(convertAddress, amount) {
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
+    const signer = await getSigner();
     const contract = new ethers.Contract(convertAddress, CONVERT_ABI, signer);
     const estimatedGas = await contract.convert.estimateGas(ethers.parseEther(amount));
     const tx = await contract.convert(ethers.parseEther(amount), {

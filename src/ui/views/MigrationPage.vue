@@ -56,8 +56,8 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ethers } from 'ethers'
 import { useStore } from 'vuex'
-import { getErc20Balance, getL2QKCBalance } from '@/utils/web3'
-import CrossChainDialog from '@/components/CrossChainDialog.vue'
+import { getErc20Balance, getL2QKCBalance } from '@/services/migration/nativeMigration.js'
+import CrossChainDialog from '@/ui/components/CrossChainDialog.vue'
 
 const store = useStore()
 const progressDialog = ref(null)
@@ -206,14 +206,15 @@ onBeforeUnmount(() => {
 	.convert-input {
 		flex: 1;
 	}
-	.convert-input ::v-deep .el-input__inner {
+	.convert-input :deep(.el-input__inner) {
 		color: #1a1a1a;
 		font-size: 16px;
 		line-height: 20px;
 		border-color: rgba(24, 30, 169, 0.2);
 		font-family: CoinbaseDisplay;
 	}
-	.convert-input ::v-deep .el-input-group__append {
+
+	.convert-input :deep(.el-input-group__append) {
 		background-color: transparent;
 		color: #181ea9;
 		font-weight: 600;
@@ -354,11 +355,11 @@ onBeforeUnmount(() => {
 		.convert-input {
 			flex: 1;
 		}
-		.convert-input ::v-deep .el-input__inner {
+		.convert-input :deep(.el-input__inner) {
 			font-size: 14px;
 			line-height: 18px;
 		}
-		.convert-input ::v-deep .el-input-group__append {
+		.convert-input :deep(.el-input-group__append) {
 			font-size: 14px;
 			line-height: 18px;
 			padding-left: 8px;

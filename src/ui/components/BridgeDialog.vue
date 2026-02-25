@@ -203,7 +203,7 @@ import { ethers } from 'ethers';
 import { computed, ref, reactive } from 'vue';
 import { Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
-import BridgeItemCard from '@/components/BridgeItemCard.vue';
+import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 
 // import {approveErc20, convert, getErc20Allowance, waitForL2Mint} from '@/utils/web3';
 

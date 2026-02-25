@@ -99,10 +99,10 @@ import { ethers } from "ethers";
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue"
 import { Refresh, Switch, Loading } from '@element-plus/icons-vue'
 import { useStore } from 'vuex'
-import { TOKEN_LIST, NETWORKS } from "@/config/tokens"
-import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/utils/mutilWeb3.js";
+import { TOKEN_LIST, NETWORKS } from "@/config/tokens.js"
+import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/services/bridge/balanceService.js";
 
-import BridgeDialog from '@/components/BridgeDialog.vue'
+import BridgeDialog from '@/ui/components/BridgeDialog.vue'
 
 const store = useStore()
 

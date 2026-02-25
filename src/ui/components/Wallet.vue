@@ -18,7 +18,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useStore } from 'vuex';
-import { connectWallet } from '@/utils/walletManager.js';
+import { connectWallet } from '@/infra/wallet/walletManager.js';
 
 const store = useStore();
 

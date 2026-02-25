@@ -1,7 +1,7 @@
 import { createApp } from 'vue';
 import App from './App.vue';
-import router from './router/index.js';
-import store from './store';
+import router from './app/router/index.js';
+import store from './app/store';
 
 // Vue 3 Buefy
 import Buefy from 'buefy'
@@ -18,7 +18,7 @@ import { faInfoCircle, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 library.add(faInfoCircle)
 library.add(faCheckCircle)
 
-import { initWalletEvents } from '@/utils/walletManager';
+import { initWalletEvents } from '@/infra/wallet/walletManager.js';
 initWalletEvents();
 
 

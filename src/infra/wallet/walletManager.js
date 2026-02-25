@@ -1,5 +1,5 @@
 // src/utils/walletManager.js
-import store from '@/store';
+import store from '@/app/store/index.js';
 import { ElMessage } from 'element-plus';
 
 const getTargetL1 = () => store.state.activeEnvId;

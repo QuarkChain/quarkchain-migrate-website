@@ -2,7 +2,7 @@
 	<b-navbar class="nav-container">
 		<template #brand>
 			<b-navbar-item tag="div" class="logo-wrapper">
-				<img class="logo" src="../assets/logo.svg">
+				<img class="logo" src="@/assets/logo.svg">
 			</b-navbar-item>
 		</template>
 
@@ -24,7 +24,7 @@
 </template>
 
 <script setup>
-import Wallet from "@/components/Wallet.vue"
+import Wallet from "@/ui/components/Wallet.vue"
 </script>
 
 <style lang="less">
