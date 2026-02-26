@@ -98,9 +98,15 @@
 							<img class="step-icon" src="@/assets/l1.svg" alt="l1-network-icon"/>
 							<div class="step-text">
 								<div class="step-title">Approve {{ safeToken.symbol }}</div>
-								<div class="step-gas">
+								<div v-if="steps[1] !== STATUS.SUCCESS" class="step-gas">
 									<div v-if="!gas1Loaded" class="gas-placeholder"></div>
-									<div v-else class="gas-value">{{ gas1ETH }} <span class="gas-usd">({{ gas1USD }})</span></div>
+									<div v-else class="gas-value">
+										<svg class="gas-icon" viewBox="0 0 64 64" fill="currentColor">
+											<path fill-rule="evenodd" clip-rule="evenodd"
+														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
+										</svg>
+										<span>{{ gas1ETH }} ETH</span>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -127,9 +133,15 @@
 							<img class="step-icon" src="@/assets/l1.svg" alt="l1-network-icon" />
 							<div class="step-text">
 								<div class="step-title">Start on {{ safeFromNetwork.name }}</div>
-								<div class="step-gas">
+								<div v-if="steps[2] !== STATUS.SUCCESS" class="step-gas">
 									<div v-if="!gas2Loaded" class="gas-placeholder"></div>
-									<div v-else class="gas-value">{{ gas2ETH }} <span class="gas-usd">({{ gas2USD }})</span></div>
+									<div v-else class="gas-value">
+										<svg class="gas-icon" viewBox="0 0 64 64" fill="currentColor">
+											<path fill-rule="evenodd" clip-rule="evenodd"
+														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
+										</svg>
+										<span>{{ gas2ETH }} ETH</span>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -156,7 +168,10 @@
 						<div class="step-left">
 							<img class="step-icon" src="@/assets/time.svg" alt="l1-network-icon" />
 							<div class="step-text">
-								<div class="step-title">Wait 3 mins</div>
+								<div v-if="steps[3] === STATUS.RETRYING">
+									⏳ Network delay. Retrying in {{ retryCountdown }}s...
+								</div>
+								<div v-else class="step-title">Wait ~3 mins</div>
 							</div>
 						</div>
 						<div class="step-right">
@@ -198,18 +213,27 @@
 </template>
 
 <script setup>
-
 import { ethers } from 'ethers';
-import { computed, ref, reactive } from 'vue';
+import { computed, ref, reactive, onMounted, onBeforeUnmount } from 'vue';
+import { useStore } from "vuex";
 import { Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
-
-// import {approveErc20, convert, getErc20Allowance, waitForL2Mint} from '@/utils/web3';
+import {
+	getTokenAllowance,
+	getGasPrice,
+	approveErc20,
+	bridgeToken,
+	waitForL2ERC20Bridge
+} from "@/services/bridge/l1ToL2.js";
 
 const emit = defineEmits(['finish']);
 
-// state
+const store = useStore()
+const L1StandardBridgeProxy = computed(() => store.getters.L1StandardBridgeProxy);
+const L2Rpc = computed(() => store.getters.L2Rpc);
+
+// global state
 const visible = ref(false);
 const currentPage = ref(1)
 
@@ -222,7 +246,6 @@ const toNetwork = ref(null);
 const token = ref(null);
 const amount = ref(0);
 const account = ref(null);
-const l2Rpc = ref(null);
 
 const safeFromNetwork = computed(() => fromNetwork.value || DEFAULT_NETWORK);
 const safeToNetwork = computed(() => toNetwork.value || DEFAULT_NETWORK);
@@ -233,7 +256,8 @@ const STATUS = {
 	IDLE: 'idle',
 	LOADING: 'loading',
 	SUCCESS: 'success',
-	DISABLED: 'disabled'
+	DISABLED: 'disabled',
+	RETRYING: 'retrying'
 }
 const createInitialSteps = () => ({
 	1: STATUS.IDLE,
@@ -241,15 +265,24 @@ const createInitialSteps = () => ({
 	3: STATUS.DISABLED,
 	4: STATUS.DISABLED
 })
-
 const steps = reactive(createInitialSteps())
 
+// deposit status
+const approveGasLimit = 50000n;
+const depositGasLimit = 1421026n;
+const L1Token = ref(null);
+const L2Token = ref(null);
+const gas1ETH = ref('');
+const gas2ETH = ref('');
+const gas1Loaded = ref(false);
+const gas2Loaded = ref(false);
+
 // methods
-function formatAmount(val) {
-	return ethers.parseEther(val.toString());
+function formatAmount(val, unit) {
+	return ethers.parseUnits(val.toString(), unit);
 }
 
-function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc, l2Rpc: rpc}) {
+function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc}) {
 	// reset
 	currentPage.value= 1;
 	Object.assign(steps, createInitialSteps());
@@ -260,7 +293,10 @@ function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: a
 	token.value = tk;
 	amount.value = Number(am);
 	account.value = acc;
-	l2Rpc.value = rpc;
+
+	// params
+	L1Token.value = token.value.networks[fromNetwork.value.chainId];
+	L2Token.value = token.value.networks[toNetwork.value.chainId];
 
 	// status
 	visible.value = true;
@@ -268,67 +304,133 @@ function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: a
 }
 
 async function loadData() {
-	// const allowance = await getErc20Allowance(oldToken.value, account.value, conversion.value);
-	// if (allowance >= formatAmount(amount.value)) steps.value = 2;
+	const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridgeProxy.value);
+	if (allowance >= formatAmount(amount.value, L1Token.value.decimals)) {
+		steps[1] = STATUS.SUCCESS
+		steps[2] = STATUS.IDLE
+	}
+	await loadGasCost();
 }
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+async function loadGasCost() {
+	if (!L1Token?.value || !L2Token?.value) {
+		return;
+	}
+	if(steps[2] === STATUS.SUCCESS) {
+		return;
+	}
+
+	gas1Loaded.value = false;
+	gas2Loaded.value = false;
+	const feeData = await getGasPrice();
+	const gasPrice = feeData.maxFeePerGas + feeData.maxPriorityFeePerGas;
+	gas1ETH.value = Number(ethers.formatEther(gasPrice * approveGasLimit)).toPrecision(4);
+	gas2ETH.value = Number(ethers.formatEther(gasPrice * depositGasLimit)).toPrecision(4);
+	gas1Loaded.value = true;
+	gas2Loaded.value = true;
+}
 
 async function runStep1() {
 	if (steps[1] !== STATUS.IDLE) return
 
 	steps[1] = STATUS.LOADING
-		try {
-// 		await approveErc20(oldToken.value, conversion.value, amount.value);
-// 		const allowance = await getErc20Allowance(oldToken.value, account.value, conversion.value);
-// 		if (allowance >= formatAmount(amount.value)) {
-// 			steps.value = 2;
-// 			ElMessage.success("Approved successfully.");
-// 		} else {
-// 			ElMessage.error("Approved amount < migration amount.");
-// 		}
-			await sleep(1500)
+	try {
+		await approveErc20(L1Token.value, L1StandardBridgeProxy.value, amount.value);
+		const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridgeProxy.value);
+		if (allowance >= formatAmount(amount.value, L1Token.value.decimals)) {
+			steps[1] = STATUS.SUCCESS;
+			steps[2] = STATUS.IDLE;
+			ElMessage.success("Approved successfully.");
+		} else {
+			steps[1] = STATUS.IDLE;
+			ElMessage.error("Approved amount < migration amount.");
+		}
 	} catch (e) {
+		steps[1] = STATUS.IDLE;
 		ElMessage.error("Approve failed.");
 	}
-
-	steps[1] = STATUS.SUCCESS
-	steps[2] = STATUS.IDLE
 }
 
 async function runStep2() {
 	if (steps[2] !== STATUS.IDLE) return
 
 	steps[2] = STATUS.LOADING
-	await sleep(2000)
-	steps[2] = STATUS.SUCCESS
+	try {
+		const receipt = await bridgeToken(L1StandardBridgeProxy.value, L1Token.value, L1Token.value.address, account.value, amount.value);
+		if (receipt?.status === 1) {
+			steps[2] = STATUS.SUCCESS
+			steps[3] = STATUS.IDLE;
+			ElMessage.success("Bridge submitted.");
 
-	// steps[3] = STATUS.LOADING
-	// await waitL2()
-	//
-	// steps[4] = STATUS.LOADING
-	// await checkArrival()
-	// steps[4] = STATUS.SUCCESS
-// 	try {
-// 		await convert(conversion.value, amount.value);
-// 		steps.value = 3;
-// 		ElMessage.success("Migration submitted.");
-// 		l2Mint();
-// 	} catch (e) {
-// 		ElMessage.error("Migration failed.");
-// 	}
+			l2Mint();
+		} else {
+			steps[2] = STATUS.IDLE;
+			ElMessage.error("Bridge failed.");
+		}
+	} catch (e) {
+		steps[2] = STATUS.IDLE;
+		ElMessage.error("Bridge failed.");
+	}
 }
 
-// async function l2Mint() {
-// 	try {
-// 		await waitForL2Mint(l2Rpc.value, account.value);
-// 		isFinish.value = true;
-// 		ElMessage.success("L2 mint completed.");
-// 		emit('finish');
-// 	} catch (e) {
-// 		ElMessage.error("L2 mint timeout.");
-// 	}
-// }
+const retryCountdown = ref(10);
+let retryTimer = null;
+let lastCheckedBlock = null;
+
+function startRetryCountdown() {
+	if (retryTimer) clearInterval(retryTimer);
+	retryCountdown.value = 10
+
+	retryTimer = setInterval(() => {
+		retryCountdown.value--
+		if (retryCountdown.value <= 0) {
+			clearInterval(retryTimer)
+			retryTimer = null;
+			l2Mint()
+		}
+	}, 1000)
+}
+
+async function l2Mint() {
+	if (steps[3] === STATUS.LOADING) return;
+
+	steps[3] = STATUS.LOADING;
+	try {
+		if (!lastCheckedBlock) {
+			const provider = new ethers.JsonRpcProvider(L2Rpc.value);
+			lastCheckedBlock = await provider.getBlockNumber() - 5;
+		}
+		await waitForL2ERC20Bridge({
+			l2Rpc: L2Rpc.value,
+			l2Token: L2Token.value,
+			userAddress: account.value,
+			amount: amount.value,
+			startBlock: lastCheckedBlock,
+		});
+
+		steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.SUCCESS;
+		ElMessage.success("Bridge completed.");
+		emit('finish');
+	} catch (e) {
+		if (e.lastCheckedBlock) {
+			lastCheckedBlock = e.lastCheckedBlock;
+		}
+		steps[3] = STATUS.RETRYING;
+		startRetryCountdown();
+	}
+}
+
+
+let gasTimer
+onMounted(() => {
+	loadGasCost()
+	gasTimer = setInterval(loadGasCost, 30000)
+})
+
+onBeforeUnmount(() => {
+	clearInterval(gasTimer)
+})
 
 defineExpose({show})
 </script>
@@ -505,10 +607,11 @@ defineExpose({show})
 			.step-text {
 				display: flex;
 				flex-direction: column;
+				align-items: flex-start;
 
 				.step-title {
 					font-size: 14px;
-					font-weight: 550;
+					font-weight: 580;
 					color: black;
 					font-family: CoinbaseDisplay;
 				}
@@ -519,7 +622,7 @@ defineExpose({show})
 
 					.gas-placeholder {
 						width: 80px;
-						height: 16px;
+						height: 14px;
 						background: #212121;
 						border-radius: 4px;
 						animation: pulse 1.2s infinite;
@@ -527,11 +630,14 @@ defineExpose({show})
 
 					.gas-value {
 						color: #555;
+						display: flex;
+						align-items: center;
+						gap: 4px;
+						min-height: 14px;
 					}
-
-					.gas-usd {
-						opacity: 0.6;
-						margin-left: 4px;
+					.gas-icon {
+						width: 12px;
+						height: 12px;
 					}
 				}
 			}

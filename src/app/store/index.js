@@ -16,6 +16,12 @@ export default createStore({
     Conversion: (state, getters) => getters.currentConfig.Conversion || null,
     OldToken: (state, getters) => getters.currentConfig.OldToken || null,
     L2Rpc: (state, getters) => getters.currentConfig.L2Rpc || null,
+
+    Bridge: (state, getters) => getters.currentConfig.Bridge || {},
+    L1StandardBridgeProxy: (state, getters) => getters.currentConfig.Bridge?.L1StandardBridgeProxy || null,
+    L1DisputeGameFactoryProxy: (state, getters) => getters.currentConfig.Bridge?.L1DisputeGameFactoryProxy || null,
+    L1OptimismPortalProxy: (state, getters) => getters.currentConfig.Bridge?.L1OptimismPortalProxy || null,
+    L2_TO_L1_MESSAGE_PASSER: (state, getters) => getters.currentConfig.Bridge?.L2_TO_L1_MESSAGE_PASSER || null,
   },
   mutations: {
     SET_ACCOUNT: (state, p) => state.account = p,
