@@ -18,10 +18,8 @@ export default createStore({
     L2Rpc: (state, getters) => getters.currentConfig.L2Rpc || null,
 
     Bridge: (state, getters) => getters.currentConfig.Bridge || {},
-    L1StandardBridgeProxy: (state, getters) => getters.currentConfig.Bridge?.L1StandardBridgeProxy || null,
-    L1DisputeGameFactoryProxy: (state, getters) => getters.currentConfig.Bridge?.L1DisputeGameFactoryProxy || null,
-    L1OptimismPortalProxy: (state, getters) => getters.currentConfig.Bridge?.L1OptimismPortalProxy || null,
-    L2_TO_L1_MESSAGE_PASSER: (state, getters) => getters.currentConfig.Bridge?.L2_TO_L1_MESSAGE_PASSER || null,
+    L1StandardBridge: (state, getters) => getters.currentConfig.Bridge?.L1StandardBridge || null,
+    L2ToL1MessagePasser: (state, getters) => getters.currentConfig.Bridge?.L2ToL1MessagePasser || null,
   },
   mutations: {
     SET_ACCOUNT: (state, p) => state.account = p,

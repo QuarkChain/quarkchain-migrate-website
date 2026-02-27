@@ -1,7 +1,7 @@
 import {ethers} from "ethers";
-import {getL1Provider, getSigner} from "@/infra/provider/providerManager.js";
+import {getL1Provider, getL2Provider, getSigner} from "@/infra/provider/providerManager.js";
 import {approve, getAllowance, getErc20Contract} from "@/infra/erc20/erc20.js";
-import {ERC20_ABI, L1_BRIDGE_ABI} from "@/config/abi.js";
+import {L1_BRIDGE_ABI, L1_MESSENGER_ABI, L2_MESSENGER_ABI} from "@/config/abi.js";
 
 export async function getGasPrice() {
 	const provider = getL1Provider();
@@ -40,64 +40,59 @@ export async function bridgeToken(bridgeAddress, l1Token, l2TokenAddress, to, am
 	return await tx.wait();
 }
 
-export async function waitForL2ERC20Bridge(
-		{
-			l2Rpc,
-			l2Token,
-			userAddress,
-			amount,
-			startBlock,
-			timeoutMs = 5 * 60 * 1000,
-			pollInterval = 5000,
+export async function waitForL2ERC20Bridge(Bridge, l1TxHash, l2Rpc) {
+	const {L1CrossDomainMessengerProxy, L2CrossDomainMessenger} = Bridge;
+	const l1Provider = getL1Provider();
+	const receipt = await l1Provider.getTransactionReceipt(l1TxHash);
+	if (!receipt) throw new Error("L1 Transaction not found");
+
+
+	const l1MessengerIface = new ethers.Interface(L1_MESSENGER_ABI);
+	let msgHash = null;
+	for (const log of receipt.logs) {
+		if (log.address.toLowerCase() !== L1CrossDomainMessengerProxy.toLowerCase()) continue;
+
+		try {
+			const parsed = l1MessengerIface.parseLog(log);
+			const {target, sender, message, messageNonce, gasLimit} = parsed.args;
+			const iface = new ethers.Interface([
+				"function relayMessage(uint256,address,address,uint256,uint256,bytes)"
+			]);
+			const encoded = iface.encodeFunctionData("relayMessage", [
+				messageNonce,
+				sender,
+				target,
+				0n,
+				gasLimit,
+				message
+			]);
+			msgHash = ethers.keccak256(encoded);
+			break;
+		} catch (e) {
 		}
-) {
-	const {address, decimals} = l2Token;
-	const expected = ethers.parseUnits(amount.toString(), decimals);
-	const provider = new ethers.JsonRpcProvider(l2Rpc);
-	const contract = new ethers.Contract(address, ERC20_ABI, provider);
+	}
+	if (!msgHash) throw new Error("SentMessage event not found in L1 receipt");
 
-	const user = userAddress.toLowerCase();
-	const zero = ethers.ZeroAddress;
 
-	const initialBalance = await contract.balanceOf(user);
-	const startTime = Date.now();
+	const l2Provider = getL2Provider(l2Rpc);
+	const l2Messenger = new ethers.Contract(L2CrossDomainMessenger, L2_MESSENGER_ABI, l2Provider);
+	const start = Date.now();
+	while (Date.now() - start < 300000) {
+		const [isSuccessful, isFailed] = await Promise.all([
+			l2Messenger.successfulMessages(msgHash),
+			l2Messenger.failedMessages(msgHash)
+		]);
 
-	let fromBlock = startBlock;
-	console.log("Watching L2 mint from block:", fromBlock);
-	while (Date.now() - startTime < timeoutMs) {
-		const latest = await provider.getBlockNumber();
-		if (latest >= fromBlock) {
-			// 1️⃣ Transfer event
-			const events = await contract.queryFilter(
-					contract.filters.Transfer(zero, user),
-					fromBlock,
-					latest
-			);
-			for (const ev of events) {
-				const value = BigInt(ev.args.value.toString());
-				if (value === expected) {
-					return {
-						txHash: ev.transactionHash,
-						blockNumber: ev.blockNumber,
-					};
-				}
-			}
-
-			// 2️⃣ balance check
-			const currentBalance = await contract.balanceOf(user);
-			if (currentBalance - initialBalance >= expected) {
-				return {
-					txHash: "balance-increase-detected",
-					blockNumber: latest,
-				};
-			}
-
-			fromBlock = latest + 1;
+		if (isSuccessful) {
+			return {status: "SUCCESS", msgHash};
 		}
-		await new Promise((r) => setTimeout(r, pollInterval));
+
+		if (isFailed) {
+			return {status: "FAILED", msgHash};
+		}
+
+		await new Promise(r => setTimeout(r, 5000));
 	}
 
-	const error = new Error("L2 ERC20 mint not detected within timeout");
-	error.lastCheckedBlock = fromBlock;
-	throw error;
+	return {status: "FAILED", msgHash};
 }

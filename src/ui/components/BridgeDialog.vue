@@ -168,10 +168,7 @@
 						<div class="step-left">
 							<img class="step-icon" src="@/assets/time.svg" alt="l1-network-icon" />
 							<div class="step-text">
-								<div v-if="steps[3] === STATUS.RETRYING">
-									⏳ Network delay. Retrying in {{ retryCountdown }}s...
-								</div>
-								<div v-else class="step-title">Wait ~3 mins</div>
+								<div class="step-title">Wait ~3 mins</div>
 							</div>
 						</div>
 						<div class="step-right">
@@ -204,6 +201,10 @@
 									 class="status-success">
 								✓
 							</div>
+							<div v-else-if="steps[4] === STATUS.FAILED"
+									 class="status-failed">
+								x
+							</div>
 						</div>
 					</div>
 				</div>
@@ -230,7 +231,8 @@ import {
 const emit = defineEmits(['finish']);
 
 const store = useStore()
-const L1StandardBridgeProxy = computed(() => store.getters.L1StandardBridgeProxy);
+const Bridge = computed(() => store.getters.Bridge);
+const L1StandardBridge = computed(() => store.getters.L1StandardBridge);
 const L2Rpc = computed(() => store.getters.L2Rpc);
 
 // global state
@@ -257,7 +259,7 @@ const STATUS = {
 	LOADING: 'loading',
 	SUCCESS: 'success',
 	DISABLED: 'disabled',
-	RETRYING: 'retrying'
+	FAILED: 'failed',
 }
 const createInitialSteps = () => ({
 	1: STATUS.IDLE,
@@ -304,7 +306,7 @@ function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: a
 }
 
 async function loadData() {
-	const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridgeProxy.value);
+	const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridge.value);
 	if (allowance >= formatAmount(amount.value, L1Token.value.decimals)) {
 		steps[1] = STATUS.SUCCESS
 		steps[2] = STATUS.IDLE
@@ -335,8 +337,8 @@ async function runStep1() {
 
 	steps[1] = STATUS.LOADING
 	try {
-		await approveErc20(L1Token.value, L1StandardBridgeProxy.value, amount.value);
-		const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridgeProxy.value);
+		await approveErc20(L1Token.value, L1StandardBridge.value, amount.value);
+		const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridge.value);
 		if (allowance >= formatAmount(amount.value, L1Token.value.decimals)) {
 			steps[1] = STATUS.SUCCESS;
 			steps[2] = STATUS.IDLE;
@@ -356,13 +358,13 @@ async function runStep2() {
 
 	steps[2] = STATUS.LOADING
 	try {
-		const receipt = await bridgeToken(L1StandardBridgeProxy.value, L1Token.value, L1Token.value.address, account.value, amount.value);
+		const receipt = await bridgeToken(L1StandardBridge.value, L1Token.value, L2Token.value.address, account.value, amount.value);
 		if (receipt?.status === 1) {
 			steps[2] = STATUS.SUCCESS
 			steps[3] = STATUS.IDLE;
 			ElMessage.success("Bridge submitted.");
 
-			l2Mint();
+			l2Mint(receipt.hash);
 		} else {
 			steps[2] = STATUS.IDLE;
 			ElMessage.error("Bridge failed.");
@@ -373,51 +375,25 @@ async function runStep2() {
 	}
 }
 
-const retryCountdown = ref(10);
-let retryTimer = null;
-let lastCheckedBlock = null;
-
-function startRetryCountdown() {
-	if (retryTimer) clearInterval(retryTimer);
-	retryCountdown.value = 10
-
-	retryTimer = setInterval(() => {
-		retryCountdown.value--
-		if (retryCountdown.value <= 0) {
-			clearInterval(retryTimer)
-			retryTimer = null;
-			l2Mint()
-		}
-	}, 1000)
-}
-
-async function l2Mint() {
+async function l2Mint(txHash) {
 	if (steps[3] === STATUS.LOADING) return;
 
 	steps[3] = STATUS.LOADING;
 	try {
-		if (!lastCheckedBlock) {
-			const provider = new ethers.JsonRpcProvider(L2Rpc.value);
-			lastCheckedBlock = await provider.getBlockNumber() - 5;
+		const result = await waitForL2ERC20Bridge(Bridge.value, txHash, L2Rpc.value);
+		if (result.status === 'SUCCESS') {
+			steps[3] = STATUS.SUCCESS;
+			steps[4] = STATUS.SUCCESS;
+			ElMessage.success("Bridge completed.");
+			emit('finish');
+		} else if (result.status === 'FAILED') {
+			steps[3] = STATUS.SUCCESS;
+			steps[4] = STATUS.FAILED;
+			ElMessage.error("Bridge execution failed on L2.");
 		}
-		await waitForL2ERC20Bridge({
-			l2Rpc: L2Rpc.value,
-			l2Token: L2Token.value,
-			userAddress: account.value,
-			amount: amount.value,
-			startBlock: lastCheckedBlock,
-		});
-
-		steps[3] = STATUS.SUCCESS;
-		steps[4] = STATUS.SUCCESS;
-		ElMessage.success("Bridge completed.");
-		emit('finish');
 	} catch (e) {
-		if (e.lastCheckedBlock) {
-			lastCheckedBlock = e.lastCheckedBlock;
-		}
-		steps[3] = STATUS.RETRYING;
-		startRetryCountdown();
+		steps[3] = STATUS.DISABLED;
+		ElMessage.error("Unexpected error occurred.");
 	}
 }
 
@@ -621,8 +597,8 @@ defineExpose({show})
 					font-size: 12px;
 
 					.gas-placeholder {
-						width: 80px;
-						height: 14px;
+						width: 88px;
+						height: 20px;
 						background: #212121;
 						border-radius: 4px;
 						animation: pulse 1.2s infinite;
@@ -633,7 +609,7 @@ defineExpose({show})
 						display: flex;
 						align-items: center;
 						gap: 4px;
-						min-height: 14px;
+						min-height: 20px;
 					}
 					.gas-icon {
 						width: 12px;
@@ -697,6 +673,19 @@ defineExpose({show})
 				align-items: center;
 				justify-content: center;
 				font-weight: bold;
+				animation: fadeIn 0.3s ease-out;
+			}
+			.status-failed {
+				width: 24px;
+				height: 24px;
+				border-radius: 50%;
+				background: #e53935;
+				color: white;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-weight: bold;
+				box-shadow: 0 0 6px rgba(229, 57, 53, 0.5);
 				animation: fadeIn 0.3s ease-out;
 			}
 		}
