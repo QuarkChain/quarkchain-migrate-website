@@ -215,7 +215,7 @@
 
 <script setup>
 import { ethers } from 'ethers';
-import { computed, ref, reactive, onMounted, onBeforeUnmount } from 'vue';
+import { computed, watch, ref, reactive, onMounted, onBeforeUnmount } from 'vue';
 import { useStore } from "vuex";
 import { Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
@@ -278,6 +278,7 @@ const gas1ETH = ref('');
 const gas2ETH = ref('');
 const gas1Loaded = ref(false);
 const gas2Loaded = ref(false);
+let controller = null;
 
 // methods
 function formatAmount(val, unit) {
@@ -324,12 +325,19 @@ async function loadGasCost() {
 
 	gas1Loaded.value = false;
 	gas2Loaded.value = false;
-	const feeData = await getGasPrice();
-	const gasPrice = feeData.maxFeePerGas + feeData.maxPriorityFeePerGas;
-	gas1ETH.value = Number(ethers.formatEther(gasPrice * approveGasLimit)).toPrecision(4);
-	gas2ETH.value = Number(ethers.formatEther(gasPrice * depositGasLimit)).toPrecision(4);
-	gas1Loaded.value = true;
-	gas2Loaded.value = true;
+	try {
+		const feeData = await getGasPrice();
+		const gasPrice = feeData.maxFeePerGas + feeData.maxPriorityFeePerGas;
+		gas1ETH.value = Number(ethers.formatEther(gasPrice * approveGasLimit)).toPrecision(4);
+		gas2ETH.value = Number(ethers.formatEther(gasPrice * depositGasLimit)).toPrecision(4);
+		gas1Loaded.value = true;
+		gas2Loaded.value = true;
+	} catch (e) {
+		if (gas1ETH.value) {
+			gas1Loaded.value = true;
+			gas2Loaded.value = true;
+		}
+	}
 }
 
 async function runStep1() {
@@ -378,20 +386,29 @@ async function runStep2() {
 async function l2Mint(txHash) {
 	if (steps[3] === STATUS.LOADING) return;
 
+	if (controller) {
+		controller.abort();
+		controller = null;
+	}
+	controller = new AbortController();
+
 	steps[3] = STATUS.LOADING;
 	try {
-		const result = await waitForL2ERC20Bridge(Bridge.value, txHash, L2Rpc.value);
+		const result = await waitForL2ERC20Bridge(Bridge.value, txHash, L2Rpc.value, controller.signal);
+
+		steps[3] = STATUS.SUCCESS;
 		if (result.status === 'SUCCESS') {
-			steps[3] = STATUS.SUCCESS;
 			steps[4] = STATUS.SUCCESS;
 			ElMessage.success("Bridge completed.");
 			emit('finish');
 		} else if (result.status === 'FAILED') {
-			steps[3] = STATUS.SUCCESS;
 			steps[4] = STATUS.FAILED;
 			ElMessage.error("Bridge execution failed on L2.");
 		}
 	} catch (e) {
+		if (e?.name === 'AbortError' || controller?.signal?.aborted) {
+			return;
+		}
 		steps[3] = STATUS.DISABLED;
 		ElMessage.error("Unexpected error occurred.");
 	}
@@ -399,14 +416,23 @@ async function l2Mint(txHash) {
 
 
 let gasTimer
-onMounted(() => {
-	loadGasCost()
-	gasTimer = setInterval(loadGasCost, 30000)
-})
+watch(visible, (val) => {
+	if (!val) {
+		if (controller) {
+			controller.abort();
+			controller = null;
+		}
+	}
 
-onBeforeUnmount(() => {
-	clearInterval(gasTimer)
-})
+	if (val) {
+		if (gasTimer) clearInterval(gasTimer);
+
+		loadGasCost();
+		gasTimer = setInterval(loadGasCost, 30000);
+	} else {
+		clearInterval(gasTimer);
+	}
+});
 
 defineExpose({show})
 </script>

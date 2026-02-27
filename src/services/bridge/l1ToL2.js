@@ -40,7 +40,7 @@ export async function bridgeToken(bridgeAddress, l1Token, l2TokenAddress, to, am
 	return await tx.wait();
 }
 
-export async function waitForL2ERC20Bridge(Bridge, l1TxHash, l2Rpc) {
+export async function waitForL2ERC20Bridge(Bridge, l1TxHash, l2Rpc, signal) {
 	const {L1CrossDomainMessengerProxy, L2CrossDomainMessenger} = Bridge;
 	const l1Provider = getL1Provider();
 	const receipt = await l1Provider.getTransactionReceipt(l1TxHash);
@@ -76,23 +76,22 @@ export async function waitForL2ERC20Bridge(Bridge, l1TxHash, l2Rpc) {
 
 	const l2Provider = getL2Provider(l2Rpc);
 	const l2Messenger = new ethers.Contract(L2CrossDomainMessenger, L2_MESSENGER_ABI, l2Provider);
-	const start = Date.now();
-	while (Date.now() - start < 300000) {
+	while (true) {
+		if (signal?.aborted) {
+			throw new Error("Polling aborted");
+		}
+
 		const [isSuccessful, isFailed] = await Promise.all([
 			l2Messenger.successfulMessages(msgHash),
 			l2Messenger.failedMessages(msgHash)
 		]);
-
 		if (isSuccessful) {
 			return {status: "SUCCESS", msgHash};
 		}
-
 		if (isFailed) {
 			return {status: "FAILED", msgHash};
 		}
 
 		await new Promise(r => setTimeout(r, 5000));
 	}
-
-	return {status: "FAILED", msgHash};
 }
