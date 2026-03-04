@@ -183,7 +183,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ gas1ETH }} ETH</span>
+										<span>{{ getGasCostETH(approveGasLimit) }} ETH</span>
 									</div>
 								</div>
 							</div>
@@ -192,7 +192,7 @@
 							<el-button
 									v-if="steps[1] === STATUS.IDLE"
 									class="right-btn"
-									@click="runStep1"
+									@click="btnApprove"
 							>
 								Approve
 							</el-button>
@@ -218,7 +218,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ gas2ETH }} ETH</span>
+										<span>{{ getGasCostETH(withdrawGasLimit) }} ETH</span>
 									</div>
 								</div>
 							</div>
@@ -228,7 +228,7 @@
 									v-if="steps[2] === STATUS.IDLE || steps[2] === STATUS.DISABLED"
 									class="right-btn"
 									:disabled="steps[2] === STATUS.DISABLED"
-									@click="runStep2"
+									@click="btnWithdraw"
 							>
 								Start
 							</el-button>
@@ -274,7 +274,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ gas2ETH }} ETH</span>
+										<span>{{ getGasCostETH(proveGasLimit) }} ETH</span>
 									</div>
 								</div>
 							</div>
@@ -285,7 +285,7 @@
 										v-if="steps[4] === STATUS.IDLE || steps[4] === STATUS.DISABLED"
 										class="right-btn"
 										:disabled="steps[4] === STATUS.DISABLED"
-										@click="runStep4"
+										@click="btnProve"
 								>
 									Prove
 								</el-button>
@@ -332,7 +332,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ gas2ETH }} ETH</span>
+										<span>{{ getGasCostETH(finalizeGasLimit) }} ETH</span>
 									</div>
 								</div>
 							</div>
@@ -344,7 +344,7 @@
 											v-if="steps[6] === STATUS.IDLE || steps[6] === STATUS.DISABLED"
 											class="right-btn"
 											:disabled="steps[6] === STATUS.DISABLED"
-											@click="finalizeGet"
+											@click="btnFinalizeGet"
 									>
 										Get
 									</el-button>
@@ -379,19 +379,48 @@ import {
 
 const emit = defineEmits(['finish']);
 
-const store = useStore()
+/**
+ * ----------------------------
+ * Types (JSDoc, for readability)
+ * ----------------------------
+ */
+/**
+ * @typedef {{ name: string, icon: string, explorer: string, chainId: string }} BridgeNetwork
+ * @typedef {{ address: string, decimals: number }} TokenOnNetwork
+ * @typedef {{ symbol: string, icon: string, networks: Record<string, TokenOnNetwork> }} BridgeToken
+ * @typedef {{
+ *   fromNetwork: BridgeNetwork,
+ *   toNetwork: BridgeNetwork,
+ *   token: BridgeToken,
+ *   amount: string | number,
+ *   account: string
+ * }} BridgeDialogShowParams
+ */
+
+/**
+ * ----------------------------
+ * Store deps
+ * ----------------------------
+ */
+const store = useStore();
+const L2Rpc = computed(() => store.getters.L2Rpc);
 const Bridge = computed(() => store.getters.Bridge);
 const L1StandardBridge = computed(() => store.getters.L1StandardBridge);
-const L2Rpc = computed(() => store.getters.L2Rpc);
+const L2StandardBridge = computed(() => store.getters.L2StandardBridge);
 
-// global state
+/**
+ * Dialog (global) state
+ */
 const visible = ref(false);
-const currentPage = ref(1)
+const currentPage = ref(1);
 
-// props, page 1
-const DEFAULT_NETWORK = {name: '', icon: '', explorer: '', chainId: ''};
-const DEFAULT_TOKEN = {symbol: '', icon: '', networks: {}};
-
+/**
+ * Page 1 (review) state
+ *
+ * This "context" is provided via `show()`.
+ */
+const DEFAULT_NETWORK = { name: '', icon: '', explorer: '', chainId: '' };
+const DEFAULT_TOKEN = { symbol: '', icon: '', networks: {} };
 const fromNetwork = ref(null);
 const toNetwork = ref(null);
 const token = ref(null);
@@ -402,20 +431,26 @@ const safeFromNetwork = computed(() => fromNetwork.value || DEFAULT_NETWORK);
 const safeToNetwork = computed(() => toNetwork.value || DEFAULT_NETWORK);
 const safeToken = computed(() => token.value || DEFAULT_TOKEN);
 
-// page 2
+/**
+ * Page 2 (acknowledgements) state
+ */
 const labels = computed(() => [
 	`I must complete 3 transactions, including 2 transactions on ${safeFromNetwork.value.name}`,
 	'Gas prices will fluctuate between transactions',
 	'This bridge can’t be sped up or cancelled'
-])
-const checkedStates = ref([false, false, false])
-const allChecked = computed(() => checkedStates.value.every(item => item))
+]);
+const checkedStates = ref([false, false, false]);
+const allChecked = computed(() => checkedStates.value.every(Boolean));
 
-// page 3
-const checked = ref(false)
+/**
+ * Page 3 (8 day wait acknowledgement) state
+ */
+const checked = ref(false);
 
 
-// page 4
+/**
+ * Page 4 (tx steps) state
+ */
 const STATUS = {
 	IDLE: 'idle',
 	LOADING: 'loading',
@@ -433,51 +468,56 @@ const createInitialSteps = () => ({
 })
 const steps = reactive(createInitialSteps())
 
-// deposit status
+
+/** -----------Bridge runtime params (derived from page1 context)----------------- */
 const approveGasLimit = 50000n;
-const depositGasLimit = 1421026n;
+const withdrawGasLimit = 1421026n;
 const proveGasLimit = 400000n;
 const finalizeGasLimit = 400000n;
+
+const gasLoaded = ref(false);
+const currentGasPrice = ref(null);
+
 const L1Token = ref(null);
 const L2Token = ref(null);
-const gasLoaded = ref(false);
-const gas1ETH = ref('');
-const gas2ETH = ref('');
-
 
 const provenTime = ref(14);
 const withdrawTime = ref(7);
+
+// TODO
 let controller = null;
 
 
-// methods
-function formatAmount(val, unit) {
-	return ethers.parseUnits(val.toString(), unit);
+/** -------------Utils--------------- */
+function formatAmount(value, decimals) {
+	return ethers.parseUnits(value.toString(), decimals);
 }
 
-function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc}) {
-	// reset
+/** -------------Public API--------------- */
+function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc }) {
+	// reset (dialog + pages)
 	currentPage.value = 1;
-	checkedStates.value = [false, false, false]
+	checkedStates.value = [false, false, false];
 	checked.value = false;
 	Object.assign(steps, createInitialSteps());
 
-	// props
+	// context (page 1)
 	fromNetwork.value = fn;
 	toNetwork.value = tn;
 	token.value = tk;
 	amount.value = Number(am);
 	account.value = acc;
 
-	// params
-	L1Token.value = token.value.networks[fromNetwork.value.chainId];
-	L2Token.value = token.value.networks[toNetwork.value.chainId];
+	// derived params (runtime)
+	L1Token.value = token.value?.networks?.[toNetwork.value?.chainId] ?? null;
+	L2Token.value = token.value?.networks?.[fromNetwork.value?.chainId] ?? null;
 
 	// status
 	visible.value = true;
 	loadData();
 }
 
+/** ----------- Methods ----------------- */
 function goPrevPage() {
 	if (currentPage.value > 1) {
 		currentPage.value -= 1;
@@ -485,8 +525,12 @@ function goPrevPage() {
 }
 
 async function loadData() {
-	const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridge.value);
-	if (allowance >= formatAmount(amount.value, L1Token.value.decimals)) {
+	if (!L2Token.value?.address || !account.value) {
+		// Not enough context yet; keep UI idle and wait for proper params.
+		return;
+	}
+	const allowance = await getTokenAllowance(L2Token.value.address, account.value, L2StandardBridge.value);
+	if (allowance >= formatAmount(amount.value, L2Token.value.decimals)) {
 		steps[1] = STATUS.SUCCESS
 		steps[2] = STATUS.IDLE
 	}
@@ -494,32 +538,36 @@ async function loadData() {
 }
 
 async function loadGasCost() {
-	if (!L1Token?.value || !L2Token?.value) {
+	if (!L1Token.value || !L2Token.value) {
 		return;
 	}
-	if(steps[2] === STATUS.SUCCESS) {
+	if(steps[6] === STATUS.SUCCESS) {
 		return;
 	}
 
 	gasLoaded.value = false;
 	try {
 		const feeData = await getGasPrice();
-		const gasPrice = feeData.maxFeePerGas + feeData.maxPriorityFeePerGas;
-		gas1ETH.value = Number(ethers.formatEther(gasPrice * approveGasLimit)).toPrecision(4);
-		gas2ETH.value = Number(ethers.formatEther(gasPrice * depositGasLimit)).toPrecision(4);
+		currentGasPrice.value = feeData.maxFeePerGas + feeData.maxPriorityFeePerGas;
 		gasLoaded.value = true;
 	} catch (e) {
 	}
 }
 
-async function runStep1() {
+function getGasCostETH(gasLimit) {
+	if (!currentGasPrice.value) return '';
+	const totalFeeWei = currentGasPrice.value * gasLimit;
+	return Number(ethers.formatEther(totalFeeWei)).toPrecision(4);
+}
+
+async function btnApprove() {
 	if (steps[1] !== STATUS.IDLE) return
 
 	steps[1] = STATUS.LOADING
 	try {
-		await approveErc20(L1Token.value, L1StandardBridge.value, amount.value);
-		const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridge.value);
-		if (allowance >= formatAmount(amount.value, L1Token.value.decimals)) {
+		await approveErc20(L2Token.value, L2StandardBridge.value, amount.value);
+		const allowance = await getTokenAllowance(L2Token.value.address, account.value, L2StandardBridge.value);
+		if (allowance >= formatAmount(amount.value, L2Token.value.decimals)) {
 			steps[1] = STATUS.SUCCESS;
 			steps[2] = STATUS.IDLE;
 			ElMessage.success("Approved successfully.");
@@ -533,7 +581,7 @@ async function runStep1() {
 	}
 }
 
-async function runStep2() {
+async function btnWithdraw() {
 	if (steps[2] !== STATUS.IDLE) return
 
 	steps[2] = STATUS.LOADING
@@ -586,12 +634,12 @@ async function l2Mint(txHash) {
 	}
 }
 
-async function runStep4() {
-
+async function btnProve() {
+	ElMessage.info("Step not implemented yet (L2→L1 prove).");
 }
 
-async function finalizeGet() {
-
+async function btnFinalizeGet() {
+	ElMessage.info("Step not implemented yet (L2→L1 finalize).");
 }
 
 let gasTimer
@@ -791,8 +839,6 @@ defineExpose({show})
 			word-break: break-word;
 			padding-left: 12px;
 			text-align: left;
-		}
-		.custom-checkbox :deep(.el-checkbox__input) {
 		}
 		.custom-checkbox :deep(.el-checkbox__inner) {
 			width: 1.25rem;

@@ -19,6 +19,7 @@ export default createStore({
 
     Bridge: (state, getters) => getters.currentConfig.Bridge || {},
     L1StandardBridge: (state, getters) => getters.currentConfig.Bridge?.L1StandardBridge || null,
+    L2StandardBridge: (state, getters) => getters.currentConfig.Bridge?.L2StandardBridge || null,
     L2ToL1MessagePasser: (state, getters) => getters.currentConfig.Bridge?.L2ToL1MessagePasser || null,
   },
   mutations: {

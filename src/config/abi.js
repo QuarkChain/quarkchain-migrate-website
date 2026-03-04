@@ -26,3 +26,6 @@ export const L2_MESSENGER_ABI = [
 	"function successfulMessages(bytes32) view returns (bool)",
 	"function failedMessages(bytes32) view returns (bool)"
 ];
+export const L2_BRIDGE_ABI = [
+	"function withdrawTo(address _l2Token, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData) external",
+];
