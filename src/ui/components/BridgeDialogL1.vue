@@ -215,7 +215,7 @@
 
 <script setup>
 import { ethers } from 'ethers';
-import { computed, watch, ref, reactive, onMounted, onBeforeUnmount } from 'vue';
+import { computed, watch, ref, reactive } from 'vue';
 import { useStore } from "vuex";
 import { Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';

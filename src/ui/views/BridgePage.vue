@@ -90,7 +90,9 @@
 			</div>
 		</el-card>
 
-		<bridge-dialog ref="progressDialog" @finish="onFinish" />
+		<!-- bridge dialogs -->
+		<bridge-dialog-l1 ref="progressDialogL1" @finish="onFinish" />
+		<bridge-dialog-l2 ref="progressDialogL2" @finish="onFinish" />
 	</div>
 </template>
 
@@ -102,7 +104,8 @@ import { useStore } from 'vuex'
 import { TOKEN_LIST, NETWORKS } from "@/config/tokens.js"
 import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/services/bridge/balanceService.js";
 
-import BridgeDialog from '@/ui/components/BridgeDialog.vue'
+import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue'
+import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue'
 
 const store = useStore()
 
@@ -135,8 +138,9 @@ const toNetworkConfig = computed(() =>
 const account = computed(() => store.state.account);
 const L2Rpc = computed(() => store.getters.L2Rpc);
 
-// bridge
-const progressDialog = ref(null)
+// bridge dialogs
+const progressDialogL1 = ref(null)
+const progressDialogL2 = ref(null)
 
 const currentTokenContract = computed(() => {
 	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value)
@@ -204,13 +208,19 @@ function handleBridge() {
 	// TODO l2 to l1  l1 to l2
 
 	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value)
-	progressDialog.value.show({
+	const payload = {
 		fromNetwork: fromNetworkConfig.value,
 		toNetwork: toNetworkConfig.value,
 		token: token,
 		amount: amount.value,
 		account: account.value,
-	})
+	}
+
+	if (isL1ToL2.value) {
+		progressDialogL1.value && progressDialogL1.value.show(payload)
+	} else {
+		progressDialogL2.value && progressDialogL2.value.show(payload)
+	}
 }
 
 function onFinish() {
