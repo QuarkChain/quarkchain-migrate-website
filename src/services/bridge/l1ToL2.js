@@ -5,7 +5,8 @@ import { L1_BRIDGE_ABI, L1_MESSENGER_ABI, L2_MESSENGER_ABI } from "@/config/abi.
 
 export async function getGasPrice(L1ChainId) {
 	const provider = getL1Provider(L1ChainId);
-	return provider.getFeeData();
+	const raw = await provider.send("eth_gasPrice", []);
+	return BigInt(raw);
 }
 
 export async function getTokenAllowance(L1ChainId, tokenAddress, owner, spender) {
@@ -14,32 +15,32 @@ export async function getTokenAllowance(L1ChainId, tokenAddress, owner, spender)
 }
 
 export async function approveErc20(L1ChainId, token, spender, amount) {
-	const {address, decimals} = token;
+	const { address, decimals } = token;
 	const value = ethers.parseUnits(amount.toString(), decimals);
 	const signer = await getSigner(L1ChainId);
 	return approve(address, signer, spender, value);
 }
 
 export async function bridgeToken(L1ChainId, bridgeAddress, l1Token, l2TokenAddress, to, amount, l2Gas = 200000) {
-	const {address, decimals} = l1Token;
+	const { address, decimals } = l1Token;
 	const signer = await getSigner(L1ChainId);
 	const contract = new ethers.Contract(bridgeAddress, L1_BRIDGE_ABI, signer);
 
 	const data = "0x";
 	const value = ethers.parseUnits(amount.toString(), decimals);
 	const tx = await contract.depositERC20To(
-			address,
-			l2TokenAddress,
-			to,
-			value,
-			l2Gas,
-			data
+		address,
+		l2TokenAddress,
+		to,
+		value,
+		l2Gas,
+		data
 	);
 	return await tx.wait();
 }
 
 export async function waitForL2ERC20Bridge(L1ChainId, L2ChainId, Bridge, l1TxHash, signal) {
-	const {L1CrossDomainMessengerProxy, L2CrossDomainMessenger} = Bridge;
+	const { L1CrossDomainMessengerProxy, L2CrossDomainMessenger } = Bridge;
 	const l1Provider = getL1Provider(L1ChainId);
 	const receipt = await l1Provider.getTransactionReceipt(l1TxHash);
 	if (!receipt) throw new Error("L1 Transaction not found");
@@ -52,7 +53,7 @@ export async function waitForL2ERC20Bridge(L1ChainId, L2ChainId, Bridge, l1TxHas
 
 		try {
 			const parsed = l1MessengerIface.parseLog(log);
-			const {target, sender, message, messageNonce, gasLimit} = parsed.args;
+			const { target, sender, message, messageNonce, gasLimit } = parsed.args;
 			const iface = new ethers.Interface([
 				"function relayMessage(uint256,address,address,uint256,uint256,bytes)"
 			]);
@@ -84,10 +85,10 @@ export async function waitForL2ERC20Bridge(L1ChainId, L2ChainId, Bridge, l1TxHas
 			l2Messenger.failedMessages(msgHash)
 		]);
 		if (isSuccessful) {
-			return {status: "SUCCESS", msgHash};
+			return { status: "SUCCESS", msgHash };
 		}
 		if (isFailed) {
-			return {status: "FAILED", msgHash};
+			return { status: "FAILED", msgHash };
 		}
 
 		await new Promise(r => setTimeout(r, 5000));

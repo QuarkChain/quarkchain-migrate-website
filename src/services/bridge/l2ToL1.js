@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import { getL1Provider, getL2Provider, getSigner } from "@/infra/provider/providerManager.js";
 import { WithdrawalTool, WithdrawalStatus } from "./bridg.js";
-import { getAllowance } from "@/infra/erc20/erc20.js";
+import { L2_BRIDGE_ABI } from "@/config/abi.js";
 
 // // 仅用于与 L1 OptimismPortal 交互
 // const L1_OPTIMISM_PORTAL_ABI = [
@@ -82,17 +82,34 @@ import { getAllowance } from "@/infra/erc20/erc20.js";
 // 	return tx.wait();
 // }
 
-export async function getTokenAllowance(L2ChainId, tokenAddress, owner, spender) {
-	const l2Provider = getL2Provider(L2ChainId);
-	return getAllowance(tokenAddress, l2Provider, owner, spender);
-}
-
+// get
 export async function getL1GasPrice(L1ChainId) {
 	const provider = getL1Provider(L1ChainId);
-	return provider.getFeeData();
+	const raw = await provider.send("eth_gasPrice", []);
+	return BigInt(raw);
 }
 
 export async function getL2GasPrice(L2ChainId) {
 	const provider = getL2Provider(L2ChainId);
-	return provider.getFeeData();
+	const raw = await provider.send("eth_gasPrice", []);
+	return BigInt(raw);
+}
+
+
+// send
+export async function bridgeTokenToL1(L2ChainId, bridgeAddress, l2Token, to, amount, l2Gas = 200000) {
+	const { address, decimals } = l2Token;
+	const signer = await getSigner(L2ChainId);
+	const contract = new ethers.Contract(bridgeAddress, L2_BRIDGE_ABI, signer);
+
+	const data = "0x";
+	const value = ethers.parseUnits(amount.toString(), decimals);
+	const tx = await contract.withdrawTo(
+			address,
+			to,
+			value,
+			l2Gas,
+			data
+	);
+	return await tx.wait();
 }

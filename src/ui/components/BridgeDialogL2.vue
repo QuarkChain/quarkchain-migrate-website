@@ -169,13 +169,13 @@
 			</div>
 
 			<div class="steps-container">
-				<!-- STEP 1 -->
+				<!-- Step 1 -->
 				<div class="step-card">
 					<div class="step-content">
 						<div class="step-left">
-							<img class="step-icon" src="@/assets/logo.png" alt="l1-network-icon"/>
+							<img class="step-icon" src="@/assets/logo.png" alt="l1-network-icon" />
 							<div class="step-text">
-								<div class="step-title">Approve {{ safeToken.symbol }}</div>
+								<div class="step-title">Start on {{ safeFromNetwork.name }}</div>
 								<div v-if="steps[1] !== STATUS.SUCCESS" class="step-gas">
 									<div v-if="!gasLoaded" class="gas-placeholder"></div>
 									<div v-else class="gas-value">
@@ -183,7 +183,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ getGasCostETH(currentL2GasPrice, approveGasLimit) }} ETH</span>
+										<span>{{ getGasCostETH(currentL2GasPrice, withdrawGasLimit) }} QKC</span>
 									</div>
 								</div>
 							</div>
@@ -192,9 +192,9 @@
 							<el-button
 									v-if="steps[1] === STATUS.IDLE"
 									class="right-btn"
-									@click="btnApprove"
+									@click="btnWithdraw"
 							>
-								Approve
+								Start
 							</el-button>
 							<div v-else-if="steps[1] === STATUS.LOADING" class="status-loading" />
 							<div v-else-if="steps[1] === STATUS.SUCCESS" class="status-success">
@@ -208,32 +208,16 @@
 				<div class="step-card">
 					<div class="step-content">
 						<div class="step-left">
-							<img class="step-icon" src="@/assets/logo.png" alt="l1-network-icon" />
+							<img class="step-icon" src="@/assets/time.svg" alt="l1-network-icon" />
 							<div class="step-text">
-								<div class="step-title">Start on {{ safeFromNetwork.name }}</div>
-								<div v-if="steps[2] !== STATUS.SUCCESS" class="step-gas">
-									<div v-if="!gasLoaded" class="gas-placeholder"></div>
-									<div v-else class="gas-value">
-										<svg class="gas-icon" viewBox="0 0 64 64" fill="currentColor">
-											<path fill-rule="evenodd" clip-rule="evenodd"
-														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
-										</svg>
-										<span>{{ getGasCostETH(currentL2GasPrice, withdrawGasLimit) }} ETH</span>
-									</div>
-								</div>
+								<div class="step-title">Wait ~{{ provenTime }} hours</div>
 							</div>
 						</div>
 						<div class="step-right">
-							<el-button
-									v-if="steps[2] === STATUS.IDLE || steps[2] === STATUS.DISABLED"
-									class="right-btn"
-									:disabled="steps[2] === STATUS.DISABLED"
-									@click="btnWithdraw"
-							>
-								Start
-							</el-button>
-							<div v-else-if="steps[2] === STATUS.LOADING" class="status-loading" />
-							<div v-else-if="steps[2] === STATUS.SUCCESS" class="status-success">
+							<div v-if="steps[2] === STATUS.LOADING"
+									 class="status-loading" />
+							<div v-else-if="steps[2] === STATUS.SUCCESS"
+									 class="status-success">
 								✓
 							</div>
 						</div>
@@ -244,30 +228,10 @@
 				<div class="step-card">
 					<div class="step-content">
 						<div class="step-left">
-							<img class="step-icon" src="@/assets/time.svg" alt="l1-network-icon" />
-							<div class="step-text">
-								<div class="step-title">Wait ~{{ provenTime }} hours</div>
-							</div>
-						</div>
-						<div class="step-right">
-							<div v-if="steps[3] === STATUS.LOADING"
-									 class="status-loading" />
-							<div v-else-if="steps[3] === STATUS.SUCCESS"
-									 class="status-success">
-								✓
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<!-- Step 4 -->
-				<div class="step-card">
-					<div class="step-content">
-						<div class="step-left">
 							<img class="step-icon" src="@/assets/l1.svg" alt="l1-network-icon" />
 							<div class="step-text">
 								<div class="step-title">Prove on {{ safeToNetwork.name }}</div>
-								<div v-if="steps[4] !== STATUS.SUCCESS" class="step-gas">
+								<div v-if="steps[3] !== STATUS.SUCCESS" class="step-gas">
 									<div v-if="!gasLoaded" class="gas-placeholder"></div>
 									<div v-else class="gas-value">
 										<svg class="gas-icon" viewBox="0 0 64 64" fill="currentColor">
@@ -282,15 +246,15 @@
 						<div class="step-right">
 							<div class="step-right">
 								<el-button
-										v-if="steps[4] === STATUS.IDLE || steps[4] === STATUS.DISABLED"
+										v-if="steps[3] === STATUS.IDLE || steps[3] === STATUS.DISABLED"
 										class="right-btn"
-										:disabled="steps[4] === STATUS.DISABLED"
+										:disabled="steps[3] === STATUS.DISABLED"
 										@click="btnProve"
 								>
 									Prove
 								</el-button>
-								<div v-else-if="steps[4] === STATUS.LOADING" class="status-loading" />
-								<div v-else-if="steps[4] === STATUS.SUCCESS" class="status-success">
+								<div v-else-if="steps[3] === STATUS.LOADING" class="status-loading" />
+								<div v-else-if="steps[3] === STATUS.SUCCESS" class="status-success">
 									✓
 								</div>
 							</div>
@@ -298,7 +262,7 @@
 					</div>
 				</div>
 
-				<!-- Step 5 -->
+				<!-- Step 4 -->
 				<div class="step-card">
 					<div class="step-content">
 						<div class="step-left">
@@ -308,9 +272,9 @@
 							</div>
 						</div>
 						<div class="step-right">
-							<div v-if="steps[5] === STATUS.LOADING"
+							<div v-if="steps[4] === STATUS.LOADING"
 									 class="status-loading" />
-							<div v-else-if="steps[5] === STATUS.SUCCESS"
+							<div v-else-if="steps[4] === STATUS.SUCCESS"
 									 class="status-success">
 								✓
 							</div>
@@ -318,14 +282,14 @@
 					</div>
 				</div>
 
-				<!-- Step 6 -->
+				<!-- Step 5 -->
 				<div class="step-card">
 					<div class="step-content">
 						<div class="step-left">
 							<img class="step-icon" src="@/assets/l1.svg" alt="l1-network-icon" />
 							<div class="step-text">
 								<div class="step-title">Get {{ amount }} {{ safeToken.symbol }} on {{ safeToNetwork.name }}</div>
-								<div v-if="steps[6] !== STATUS.SUCCESS" class="step-gas">
+								<div v-if="steps[5] !== STATUS.SUCCESS" class="step-gas">
 									<div v-if="!gasLoaded" class="gas-placeholder"></div>
 									<div v-else class="gas-value">
 										<svg class="gas-icon" viewBox="0 0 64 64" fill="currentColor">
@@ -341,15 +305,15 @@
 							<div class="step-right">
 								<div class="step-right">
 									<el-button
-											v-if="steps[6] === STATUS.IDLE || steps[6] === STATUS.DISABLED"
+											v-if="steps[5] === STATUS.IDLE || steps[5] === STATUS.DISABLED"
 											class="right-btn"
-											:disabled="steps[6] === STATUS.DISABLED"
+											:disabled="steps[5] === STATUS.DISABLED"
 											@click="btnFinalizeGet"
 									>
 										Get
 									</el-button>
-									<div v-else-if="steps[6] === STATUS.LOADING" class="status-loading" />
-									<div v-else-if="steps[6] === STATUS.SUCCESS" class="status-success">
+									<div v-else-if="steps[5] === STATUS.LOADING" class="status-loading" />
+									<div v-else-if="steps[5] === STATUS.SUCCESS" class="status-success">
 										✓
 									</div>
 								</div>
@@ -370,13 +334,7 @@ import { Wallet, InfoFilled, Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import {
-	approveErc20,
-	bridgeToken,
-	waitForL2ERC20Bridge
-} from "@/services/bridge/l1ToL2.js";
-import {
-	getL1GasPrice, getL2GasPrice,
-	getTokenAllowance,
+	getL1GasPrice, getL2GasPrice, bridgeTokenToL1
 } from "@/services/bridge/l2ToL1.js";
 
 const emit = defineEmits(['finish']);
@@ -450,13 +408,11 @@ const createInitialSteps = () => ({
 	3: STATUS.DISABLED,
 	4: STATUS.DISABLED,
 	5: STATUS.DISABLED,
-	6: STATUS.DISABLED,
 })
 const steps = reactive(createInitialSteps())
 
 
 /** -----------Bridge runtime params (derived from page1 context)----------------- */
-const approveGasLimit = 50000n;
 const withdrawGasLimit = 1421026n;
 const proveGasLimit = 400000n;
 const finalizeGasLimit = 400000n;
@@ -474,11 +430,6 @@ const withdrawTime = ref(7);
 // TODO
 let controller = null;
 
-
-/** -------------Utils--------------- */
-function formatAmount(value, decimals) {
-	return ethers.parseUnits(value.toString(), decimals);
-}
 
 /** -------------Public API--------------- */
 function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc }) {
@@ -501,7 +452,7 @@ function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: 
 
 	// status
 	visible.value = true;
-	loadData();
+	loadGasCost();
 }
 
 /** ----------- Methods ----------------- */
@@ -509,19 +460,6 @@ function goPrevPage() {
 	if (currentPage.value > 1) {
 		currentPage.value -= 1;
 	}
-}
-
-async function loadData() {
-	if (!L2Token.value?.address || !account.value) {
-		// Not enough context yet; keep UI idle and wait for proper params.
-		return;
-	}
-	const allowance = await getTokenAllowance(L2ChainId.value, L2Token.value.address, account.value, L2StandardBridge.value);
-	if (allowance >= formatAmount(amount.value, L2Token.value.decimals)) {
-		steps[1] = STATUS.SUCCESS
-		steps[2] = STATUS.IDLE
-	}
-	await loadGasCost();
 }
 
 async function loadGasCost() {
@@ -532,10 +470,10 @@ async function loadGasCost() {
 
 	gasLoaded.value = false;
 	try {
-		const feeDataL1 = await getL1GasPrice(L1ChainId.value);
-		const feeDataL2 = await getL2GasPrice(L2ChainId.value);
-		currentL1GasPrice.value = feeDataL1.maxFeePerGas;
-		currentL2GasPrice.value = feeDataL2.maxFeePerGas;
+		const gasPrice1 = await getL1GasPrice(L1ChainId.value);
+		const gasPrice2 = await getL2GasPrice(L2ChainId.value);
+		currentL1GasPrice.value = gasPrice1;
+		currentL2GasPrice.value = gasPrice2;
 		gasLoaded.value = true;
 	} catch (e) {
 	}
@@ -543,52 +481,32 @@ async function loadGasCost() {
 
 function getGasCostETH(gasPrice, gasLimit) {
 	const totalFeeWei = gasPrice * gasLimit;
-	return Number(ethers.formatEther(totalFeeWei)).toPrecision(4);
+	const ethString = ethers.formatEther(totalFeeWei);
+	return Number(ethString).toFixed(8).replace(/\.?0+$/, '');
 }
 
-async function btnApprove() {
+async function btnWithdraw() {
 	if (steps[1] !== STATUS.IDLE) return
 
-	steps[1] = STATUS.LOADING
+	steps[1] = STATUS.LOADING;
 	try {
-		await approveErc20(L2ChainId.value, L2Token.value, L2StandardBridge.value, amount.value);
-		const allowance = await getTokenAllowance(L2ChainId.value, L2Rpc.value, L2Token.value.address, account.value, L2StandardBridge.value);
-		if (allowance >= formatAmount(amount.value, L2Token.value.decimals)) {
-			steps[1] = STATUS.SUCCESS;
-			steps[2] = STATUS.IDLE;
-			ElMessage.success("Approved successfully.");
+		const receipt = await bridgeTokenToL1(L2ChainId.value, L2StandardBridge.value, L2Token.value, account.value, amount.value);
+		if (receipt?.status === 1) {
+			steps[1] = STATUS.SUCCESS
+			steps[2] = STATUS.LOADING;
+			ElMessage.success("Bridge submitted.");
+
+			// l2Mint(receipt.hash);
 		} else {
 			steps[1] = STATUS.IDLE;
-			ElMessage.error("Approved amount < migration amount.");
+			ElMessage.error("Transaction reverted.");
 		}
 	} catch (e) {
 		steps[1] = STATUS.IDLE;
-		ElMessage.error("Approve failed.");
+		ElMessage.error("Bridge failed.");
 	}
 }
 
-// async function btnWithdraw() {
-// 	if (steps[2] !== STATUS.IDLE) return
-//
-// 	steps[2] = STATUS.LOADING
-// 	try {
-// 		const receipt = await bridgeToken(L1StandardBridge.value, L1Token.value, L2Token.value.address, account.value, amount.value);
-// 		if (receipt?.status === 1) {
-// 			steps[2] = STATUS.SUCCESS
-// 			steps[3] = STATUS.IDLE;
-// 			ElMessage.success("Bridge submitted.");
-//
-// 			l2Mint(receipt.hash);
-// 		} else {
-// 			steps[2] = STATUS.IDLE;
-// 			ElMessage.error("Bridge failed.");
-// 		}
-// 	} catch (e) {
-// 		steps[2] = STATUS.IDLE;
-// 		ElMessage.error("Bridge failed.");
-// 	}
-// }
-//
 // async function l2Mint(txHash) {
 // 	if (steps[3] === STATUS.LOADING) return;
 //

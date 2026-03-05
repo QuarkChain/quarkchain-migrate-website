@@ -99,7 +99,7 @@
 							<div class="step-text">
 								<div class="step-title">Approve {{ safeToken.symbol }}</div>
 								<div v-if="steps[1] !== STATUS.SUCCESS" class="step-gas">
-									<div v-if="!gas1Loaded" class="gas-placeholder"></div>
+									<div v-if="!gasLoaded" class="gas-placeholder"></div>
 									<div v-else class="gas-value">
 										<svg class="gas-icon" viewBox="0 0 64 64" fill="currentColor">
 											<path fill-rule="evenodd" clip-rule="evenodd"
@@ -134,7 +134,7 @@
 							<div class="step-text">
 								<div class="step-title">Start on {{ safeFromNetwork.name }}</div>
 								<div v-if="steps[2] !== STATUS.SUCCESS" class="step-gas">
-									<div v-if="!gas2Loaded" class="gas-placeholder"></div>
+									<div v-if="!gasLoaded" class="gas-placeholder"></div>
 									<div v-else class="gas-value">
 										<svg class="gas-icon" viewBox="0 0 64 64" fill="currentColor">
 											<path fill-rule="evenodd" clip-rule="evenodd"
@@ -271,14 +271,13 @@ const createInitialSteps = () => ({
 const steps = reactive(createInitialSteps())
 
 // deposit status
-const approveGasLimit = 50000n;
-const depositGasLimit = 1421026n;
+const approveGasLimit = 80000n;
+const depositGasLimit = 1500000n;
 const L1Token = ref(null);
 const L2Token = ref(null);
 const gas1ETH = ref('');
 const gas2ETH = ref('');
-const gas1Loaded = ref(false);
-const gas2Loaded = ref(false);
+const gasLoaded = ref(false);
 let controller = null;
 
 // methods
@@ -324,19 +323,23 @@ async function loadGasCost() {
 		return;
 	}
 
-	gas1Loaded.value = false;
-	gas2Loaded.value = false;
+	gasLoaded.value = false;
 	try {
-		const feeData = await getGasPrice(L1ChainId.value);
-		const gasPrice = feeData.gasPrice || (feeData.maxFeePerGas);
-		gas1ETH.value = Number(ethers.formatEther(gasPrice * approveGasLimit)).toPrecision(4);
-		gas2ETH.value = Number(ethers.formatEther(gasPrice * depositGasLimit)).toPrecision(4);
-		gas1Loaded.value = true;
-		gas2Loaded.value = true;
+		const gasPrice = await getGasPrice(L1ChainId.value);
+		const totalWei1 = gasPrice * BigInt(approveGasLimit);
+		const totalWei2 = gasPrice * BigInt(depositGasLimit);
+		const ethString1 = ethers.formatEther(totalWei1);
+		const ethString2 = ethers.formatEther(totalWei2);
+		const formatEth = (val) => {
+			return Number(val).toFixed(8).replace(/\.?0+$/, '');
+		};
+
+		gas1ETH.value = formatEth(ethString1);
+		gas2ETH.value = formatEth(ethString2);
+		gasLoaded.value = true;
 	} catch (e) {
 		if (gas1ETH.value) {
-			gas1Loaded.value = true;
-			gas2Loaded.value = true;
+			gasLoaded.value = true;
 		}
 	}
 }

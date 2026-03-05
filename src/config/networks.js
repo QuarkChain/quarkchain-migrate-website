@@ -27,7 +27,6 @@ export const NETWORKS = {
 			'https://1rpc.io/sepolia',
 			'https://0xrpc.io/sep',
 			'https://eth-sepolia.api.onfinality.io/public',
-			'https://eth-sepolia.public.blastapi.io',
 			'https://sepolia.gateway.tenderly.co',
 			'https://ethereum-sepolia-rpc.publicnode.com',
 			'https://ethereum-sepolia.rpc.subquery.network/public'
