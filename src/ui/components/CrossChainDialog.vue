@@ -60,16 +60,24 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { useStore } from "vuex";
 import { ElMessage } from 'element-plus';
-import { approveErc20, convert, getErc20Allowance, waitForL2Mint } from '@/services/migration/nativeMigration.js';
 import { ethers } from 'ethers';
-
 import { ElIcon } from 'element-plus'
 import { Close, Loading } from '@element-plus/icons-vue'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 
+import { approveErc20, convert, getL1Erc20Allowance, waitForL2Mint } from '@/services/migration/nativeMigration.js';
+
 const emit = defineEmits(['finish']);
+
+const store = useStore()
+const account = computed(() => store.state.account)
+const Conversion = computed(() => store.getters.Conversion);
+const OldToken = computed(() => store.getters.OldToken);
+const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
+const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
 // state
 const visible = ref(false);
@@ -79,42 +87,34 @@ const loading = ref(0);
 
 const amount = ref(0n);
 const balance = ref(0n);
-const account = ref(null);
-const oldToken = ref(null);
-const conversion = ref(null);
-const l2Rpc = ref(null);
 
 // methods
 function formatAmount(val) {
 	return ethers.parseEther(val.toString());
 }
 
-function show({ amount: amt, balance: bal, account: acc, conversion: conv, oldToken: old, l2Rpc: rpc }) {
+function show(amt, bal) {
 	steps.value = 1;
 	isFinish.value = false;
 	loading.value = 0;
 
 	amount.value = amt;
 	balance.value = bal;
-	account.value = acc;
-	conversion.value = conv;
-	oldToken.value = old;
-	l2Rpc.value = rpc;
 
 	visible.value = true;
 	loadData();
 }
 
 async function loadData() {
-	const allowance = await getErc20Allowance(oldToken.value, account.value, conversion.value);
+	const allowance = await getL1Erc20Allowance(L1ChainId.value, OldToken.value, account.value, Conversion.value);
 	if (allowance >= formatAmount(amount.value)) steps.value = 2;
 }
 
 async function clickApprove() {
 	loading.value = 1;
 	try {
-		await approveErc20(oldToken.value, conversion.value, amount.value);
-		const allowance = await getErc20Allowance(oldToken.value, account.value, conversion.value);
+		await approveErc20(L1ChainId.value, OldToken.value, Conversion.value, amount.value);
+		const allowance = await getL1Erc20Allowance(L1ChainId.value, OldToken.value, account.value, Conversion.value);
 		if (allowance >= formatAmount(amount.value)) {
 			steps.value = 2;
 			ElMessage.success("Approved successfully.");
@@ -130,19 +130,25 @@ async function clickApprove() {
 async function clickMigration() {
 	loading.value = 2;
 	try {
-		await convert(conversion.value, amount.value);
-		steps.value = 3;
-		ElMessage.success("Migration submitted.");
-		l2Mint();
+		const tx = await convert(L1ChainId.value, Conversion.value, amount.value);
+		const receipt = await tx.wait();
+		if(receipt.status === 1) {
+			steps.value = 3;
+			ElMessage.success("Transaction confirmed on L1.");
+			l2Mint();
+		} else {
+			throw new Error("Transaction reverted");
+		}
 	} catch (e) {
 		ElMessage.error("Migration failed.");
+	} finally {
+		loading.value = 0;
 	}
-	loading.value = 0;
 }
 
 async function l2Mint() {
 	try {
-		await waitForL2Mint(l2Rpc.value, account.value);
+		await waitForL2Mint(L2ChainId.value, account.value);
 		isFinish.value = true;
 		ElMessage.success("L2 mint completed.");
 		emit('finish');
@@ -151,7 +157,7 @@ async function l2Mint() {
 	}
 }
 
-defineExpose({ show })
+defineExpose({show})
 </script>
 
 <style scoped lang="less">

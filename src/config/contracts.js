@@ -1,0 +1,30 @@
+export const CONTRACTS = {
+	'0x1': {
+		Conversion: '0x47e2609C842a12c395623298114587C616e142c3',
+		OldToken: '0xEA26c4aC16D4a5A106820BC8AEE85fd0b7b2b664',
+		Bridge: {
+			L1StandardBridge: '',    // L1StandardBridgeProxy
+			L1CrossDomainMessengerProxy: '',
+			L1DisputeGameFactoryProxy: '',
+			L1OptimismPortalProxy: '',
+
+			L2StandardBridge: '0x4200000000000000000000000000000000000010',
+			L2CrossDomainMessenger: '0x4200000000000000000000000000000000000007',
+			L2ToL1MessagePasser: '0x4200000000000000000000000000000000000016',
+		}
+	},
+	'0xaa36a7': {
+		Conversion: '0x6309Ab1d95b12FbBd256FC1aEe9154A18fC961d1',
+		OldToken: '0xC359FCF9328143f798C197B86856e656411aBC48',
+		Bridge: {
+			L1StandardBridge: '0x2a3e379c6689d4b37efe00843c2bcf6b4574187b',    // L1StandardBridgeProxy
+			L1CrossDomainMessengerProxy: '0x47a112d15e7ab56f06d0666aff9256ede18d8caf',
+			L1DisputeGameFactoryProxy: '0x10ffc150ebad96e483d0af6bbe8b48803b7f65d4',
+			L1OptimismPortalProxy: '0x7f59517cd129c29da65768fd028990bcb436b02e',
+
+			L2StandardBridge: '0x4200000000000000000000000000000000000010',
+			L2CrossDomainMessenger: '0x4200000000000000000000000000000000000007',
+			L2ToL1MessagePasser: '0x4200000000000000000000000000000000000016',
+		},
+	},
+}

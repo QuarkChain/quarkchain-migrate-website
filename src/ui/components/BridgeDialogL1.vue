@@ -233,7 +233,8 @@ const emit = defineEmits(['finish']);
 const store = useStore()
 const Bridge = computed(() => store.getters.Bridge);
 const L1StandardBridge = computed(() => store.getters.L1StandardBridge);
-const L2Rpc = computed(() => store.getters.L2Rpc);
+const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
+const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
 // global state
 const visible = ref(false);
@@ -307,7 +308,7 @@ function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: a
 }
 
 async function loadData() {
-	const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridge.value);
+	const allowance = await getTokenAllowance(L1ChainId.value, L1Token.value.address, account.value, L1StandardBridge.value);
 	if (allowance >= formatAmount(amount.value, L1Token.value.decimals)) {
 		steps[1] = STATUS.SUCCESS
 		steps[2] = STATUS.IDLE
@@ -326,8 +327,8 @@ async function loadGasCost() {
 	gas1Loaded.value = false;
 	gas2Loaded.value = false;
 	try {
-		const feeData = await getGasPrice();
-		const gasPrice = feeData.maxFeePerGas + feeData.maxPriorityFeePerGas;
+		const feeData = await getGasPrice(L1ChainId.value);
+		const gasPrice = feeData.gasPrice || (feeData.maxFeePerGas);
 		gas1ETH.value = Number(ethers.formatEther(gasPrice * approveGasLimit)).toPrecision(4);
 		gas2ETH.value = Number(ethers.formatEther(gasPrice * depositGasLimit)).toPrecision(4);
 		gas1Loaded.value = true;
@@ -345,8 +346,8 @@ async function runStep1() {
 
 	steps[1] = STATUS.LOADING
 	try {
-		await approveErc20(L1Token.value, L1StandardBridge.value, amount.value);
-		const allowance = await getTokenAllowance(L1Token.value.address, account.value, L1StandardBridge.value);
+		await approveErc20(L1ChainId.value, L1Token.value, L1StandardBridge.value, amount.value);
+		const allowance = await getTokenAllowance(L1ChainId.value, L1Token.value.address, account.value, L1StandardBridge.value);
 		if (allowance >= formatAmount(amount.value, L1Token.value.decimals)) {
 			steps[1] = STATUS.SUCCESS;
 			steps[2] = STATUS.IDLE;
@@ -366,7 +367,7 @@ async function runStep2() {
 
 	steps[2] = STATUS.LOADING
 	try {
-		const receipt = await bridgeToken(L1StandardBridge.value, L1Token.value, L2Token.value.address, account.value, amount.value);
+		const receipt = await bridgeToken(L1ChainId.value, L1StandardBridge.value, L1Token.value, L2Token.value.address, account.value, amount.value);
 		if (receipt?.status === 1) {
 			steps[2] = STATUS.SUCCESS
 			steps[3] = STATUS.IDLE;
@@ -394,7 +395,7 @@ async function l2Mint(txHash) {
 
 	steps[3] = STATUS.LOADING;
 	try {
-		const result = await waitForL2ERC20Bridge(Bridge.value, txHash, L2Rpc.value, controller.signal);
+		const result = await waitForL2ERC20Bridge(L1ChainId.value, L2ChainId.value, Bridge.value, txHash, controller.signal);
 
 		steps[3] = STATUS.SUCCESS;
 		if (result.status === 'SUCCESS') {

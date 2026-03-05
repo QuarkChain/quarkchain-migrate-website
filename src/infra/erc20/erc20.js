@@ -1,19 +1,22 @@
 import { ethers } from "ethers";
 import { ERC20_ABI } from "@/config/abi.js";
 
-export function getErc20Contract(address, providerOrSigner) {
+function getErc20Contract(address, providerOrSigner) {
 	return new ethers.Contract(address, ERC20_ABI, providerOrSigner);
 }
 
-export async function getBalance(contract, user) {
-	return await contract.balanceOf(user);
+export async function getBalance(address, providerOrSigner, user) {
+	const contract = getErc20Contract(address, ERC20_ABI, providerOrSigner);
+	return contract.balanceOf(user);
 }
 
-export async function getAllowance(contract, owner, spender) {
-	return await contract.allowance(owner, spender);
+export async function getAllowance(address, providerOrSigner, owner, spender) {
+	const contract = getErc20Contract(address, ERC20_ABI, providerOrSigner);
+	return contract.allowance(owner, spender);
 }
 
-export async function approve(contract, spender, amount) {
+export async function approve(address, providerOrSigner, spender, amount) {
+	const contract = getErc20Contract(address, ERC20_ABI, providerOrSigner);
 	const tx = await contract.approve(spender, amount);
-	return await tx.wait();
+	return tx.wait();
 }

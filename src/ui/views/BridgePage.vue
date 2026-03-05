@@ -98,149 +98,156 @@
 
 <script setup>
 import { ethers } from "ethers";
-import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue"
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { Refresh, Switch, Loading } from '@element-plus/icons-vue'
-import { useStore } from 'vuex'
-import { TOKEN_LIST, NETWORKS } from "@/config/tokens.js"
+import { useStore } from 'vuex';
+import { TOKEN_LIST } from "@/config/tokens.js";
+import { NETWORKS } from "@/config/networks.js";
 import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/services/bridge/balanceService.js";
 
-import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue'
-import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue'
+import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
+import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
 
-const store = useStore()
-
-// --- State ---
-// history
-const pendingCount = ref(1)
-
-// swap
-const amount = ref('')
-const selectedTokenSymbol = ref(TOKEN_LIST[0].symbol)
-const isBalanceLoading = ref(false)
-const balance = ref('0.00')
-
-//（true  L1 -> L2, false L2 -> L1）
-const isL1ToL2 = ref(true)
-
-// --- Computed ---
-const activeEnvId = computed(() => store.state.activeEnvId);
-const fromNetworkConfig = computed(() =>
-		isL1ToL2.value
-				? NETWORKS.L1[activeEnvId.value === '0x1' ? 'mainnet': 'testnet']
-				: NETWORKS.L2[activeEnvId.value === '0x1' ? 'mainnet': 'testnet']
-);
-
-const toNetworkConfig = computed(() =>
-		isL1ToL2.value
-				? NETWORKS.L2[activeEnvId.value === '0x1' ? 'mainnet': 'testnet']
-				: NETWORKS.L1[activeEnvId.value === '0x1' ? 'mainnet': 'testnet']
-);
+// -----------------------------
+// Vuex & chain IDs
+// -----------------------------
+const store = useStore();
 const account = computed(() => store.state.account);
-const L2Rpc = computed(() => store.getters.L2Rpc);
+const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
+const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
-// bridge dialogs
-const progressDialogL1 = ref(null)
-const progressDialogL2 = ref(null)
+// -----------------------------
+// Bridge state
+// -----------------------------
+const pendingCount = ref(1);
 
+const isL1ToL2 = ref(true); // true: L1->L2, false: L2->L1
+const amount = ref('');
+const selectedTokenSymbol = ref(TOKEN_LIST[0].symbol);
+const balance = ref('0.0000');
+const isBalanceLoading = ref(false);
+
+// -----------------------------
+// Bridge dialogs
+// -----------------------------
+const progressDialogL1 = ref(null);
+const progressDialogL2 = ref(null);
+
+// -----------------------------
+// Computed: network config
+// -----------------------------
+const fromNetworkConfig = computed(() => {
+	const chainId = isL1ToL2.value ? L1ChainId.value : L2ChainId.value;
+	return NETWORKS[chainId] || {};
+});
+const toNetworkConfig = computed(() => {
+	const chainId = isL1ToL2.value ? L2ChainId.value : L1ChainId.value;
+	return NETWORKS[chainId] || {};
+});
+
+// -----------------------------
+// Computed: token contract
+// -----------------------------
 const currentTokenContract = computed(() => {
-	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value)
-	const chainId = isL1ToL2.value ? activeEnvId.value : (activeEnvId.value === '0x1' ? "0x186ab" : "0x1adbb")
-	return token?.networks[chainId] || null
-})
+	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value);
+	if (!token) return null;
 
+	const chainId = isL1ToL2.value ? L1ChainId.value : L2ChainId.value;
+	return token.networks[chainId] || null;
+});
+
+// -----------------------------
+// Computed: button state
+// -----------------------------
 const isAmountValid = computed(() => {
-	const val = parseFloat(amount.value)
-	return val > 0 && val <= parseFloat(balance.value)
-})
+	const val = parseFloat(amount.value);
+	return val > 0 && val <= parseFloat(balance.value);
+});
 
 const buttonText = computed(() => {
-	if (!amount.value || parseFloat(amount.value) === 0) return 'Enter Amount'
-	if (parseFloat(amount.value) > parseFloat(balance.value)) return 'Insufficient Balance'
-	return 'Transfer'
-})
+	const val = parseFloat(amount.value);
+	if (!amount.value || val === 0) return 'Enter Amount';
+	if (val > parseFloat(balance.value)) return 'Insufficient Balance';
+	return 'Transfer';
+});
 
-
-// --- Methods ---
-
+// -----------------------------
+// Methods
+// -----------------------------
 async function fetchBalance() {
-	if (!account.value) {
-		balance.value = '0.00'
-		return
+	if (!account.value || !currentTokenContract.value) {
+		balance.value = '0.0000';
+		return;
 	}
 
-	isBalanceLoading.value = true
+	isBalanceLoading.value = true;
 	try {
-		let rawBalance;
 		const { address, decimals } = currentTokenContract.value;
+		let rawBalance;
 
 		if (isL1ToL2.value) {
-			rawBalance = await getErc20BalanceByL1(address, account.value);
+			rawBalance = await getErc20BalanceByL1(L1ChainId.value, address, account.value);
 		} else {
-			rawBalance = await getErc20BalanceByL2(L2Rpc.value, address, account.value);
+			rawBalance = await getErc20BalanceByL2(L2ChainId.value, address, account.value);
 		}
 
-		const formatted = ethers.formatUnits(rawBalance, decimals);
-		balance.value = parseFloat(formatted).toFixed(4);
+		balance.value = parseFloat(ethers.formatUnits(rawBalance, decimals)).toFixed(4);
 	} catch (e) {
-		console.error("Fetch balance failed", e)
+		console.error("Fetch balance failed:", e);
+		balance.value = '0.0000';
 	} finally {
-		isBalanceLoading.value = false
+		isBalanceLoading.value = false;
 	}
 }
 
 function switchNetwork() {
-	isL1ToL2.value = !isL1ToL2.value
-	amount.value = ''
+	isL1ToL2.value = !isL1ToL2.value;
+	amount.value = '';
 }
 
 function setMax() {
-	amount.value = balance.value
+	amount.value = balance.value;
 }
 
 function handleBridge() {
-	// console.log("Initiating bridge...", {
-	// 	token: selectedTokenSymbol.value,
-	// 	amount: amount.value,
-	// 	from: fromNetworkConfig.value.name,
-	// 	to: toNetworkConfig.value.name,
-	// 	contract: currentTokenContract.value.address
-	// })
-	// TODO l2 to l1  l1 to l2
+	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value);
+	if (!token) return;
 
-	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value)
 	const payload = {
 		fromNetwork: fromNetworkConfig.value,
 		toNetwork: toNetworkConfig.value,
-		token: token,
+		token,
 		amount: amount.value,
 		account: account.value,
-	}
+	};
 
 	if (isL1ToL2.value) {
-		progressDialogL1.value && progressDialogL1.value.show(payload)
+		progressDialogL1.value?.show(payload);
 	} else {
-		progressDialogL2.value && progressDialogL2.value.show(payload)
+		progressDialogL2.value?.show(payload);
 	}
 }
 
 function onFinish() {
-	fetchBalance()
+	fetchBalance();
 }
 
-// --- Watchers ---
-watch([selectedTokenSymbol, isL1ToL2, account], () => {
-	fetchBalance()
-}, { immediate: true })
+// -----------------------------
+// Watchers
+// -----------------------------
+watch([selectedTokenSymbol, isL1ToL2, account], fetchBalance, { immediate: true });
 
-let timer
+// -----------------------------
+// Lifecycle: polling balance
+// -----------------------------
+let timer;
 onMounted(() => {
-	fetchBalance()
-	timer = setInterval(fetchBalance, 30000)
-})
-
+	fetchBalance();
+	timer = setInterval(fetchBalance, 30_000);
+});
 onBeforeUnmount(() => {
-	clearInterval(timer)
-})
+	clearInterval(timer);
+});
 </script>
 
 

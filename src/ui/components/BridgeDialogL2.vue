@@ -183,7 +183,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ getGasCostETH(approveGasLimit) }} ETH</span>
+										<span>{{ getGasCostETH(currentL2GasPrice, approveGasLimit) }} ETH</span>
 									</div>
 								</div>
 							</div>
@@ -218,7 +218,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ getGasCostETH(withdrawGasLimit) }} ETH</span>
+										<span>{{ getGasCostETH(currentL2GasPrice, withdrawGasLimit) }} ETH</span>
 									</div>
 								</div>
 							</div>
@@ -274,7 +274,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ getGasCostETH(proveGasLimit) }} ETH</span>
+										<span>{{ getGasCostETH(currentL1GasPrice, proveGasLimit) }} ETH</span>
 									</div>
 								</div>
 							</div>
@@ -332,7 +332,7 @@
 											<path fill-rule="evenodd" clip-rule="evenodd"
 														d="M54.8643 24.5435C54.8643 23.1708 54.3371 21.864 53.3927 20.8757L41.4888 8.43368C40.3358 7.2367 40.4566 5.282 41.7963 4.23876C42.9603 3.32729 44.6735 3.5579 45.6947 4.63409L57.6206 17.0651C58.4003 17.746 59.0482 18.5586 59.5424 19.4701C60.1134 20.4584 60.5417 21.6334 60.5417 22.9951V43.5744C60.5417 47.923 57.1923 51.7116 52.8546 51.8434C48.517 51.9752 44.6735 48.3733 44.6735 43.9148V37.3918C44.6735 35.8215 41.7414 34.5586 40.171 34.5586H38.6776V54.6766C38.6776 54.8743 38.6776 55.061 38.6446 55.2587C38.5348 56.3239 38.1285 57.3012 37.5245 58.1029C36.4923 59.4646 34.856 60.3431 33.0111 60.3431H10.3234C8.36872 60.3431 6.64463 59.3547 5.62335 57.8393C5.00839 56.9388 4.65698 55.8407 4.65698 54.6657V12.1564C4.65698 7.45633 8.46755 3.65674 13.1566 3.65674H30.156C34.856 3.65674 38.6556 7.46731 38.6556 12.1564V28.8812H40.1491C44.8492 28.8812 50.3179 32.6917 50.3179 37.3808V43.772C50.3179 44.958 51.1745 46.0342 52.3605 46.155C53.7222 46.2868 54.8533 45.2326 54.8533 43.9038V24.5435H54.8643ZM13.7387 8.77441C11.2679 8.77441 9.26929 10.9487 9.26929 13.6392V27.0805C9.26929 29.771 11.2679 31.9453 13.7387 31.9453H28.8712C31.342 31.9453 33.3407 29.771 33.3407 27.0805V13.6392C33.3407 10.9487 31.342 8.77441 28.8712 8.77441H13.7387Z"></path>
 										</svg>
-										<span>{{ getGasCostETH(finalizeGasLimit) }} ETH</span>
+										<span>{{ getGasCostETH(currentL1GasPrice, finalizeGasLimit) }} ETH</span>
 									</div>
 								</div>
 							</div>
@@ -370,32 +370,17 @@ import { Wallet, InfoFilled, Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import {
-	getTokenAllowance,
-	getGasPrice,
 	approveErc20,
 	bridgeToken,
 	waitForL2ERC20Bridge
 } from "@/services/bridge/l1ToL2.js";
+import {
+	getL1GasPrice, getL2GasPrice,
+	getTokenAllowance,
+} from "@/services/bridge/l2ToL1.js";
 
 const emit = defineEmits(['finish']);
 
-/**
- * ----------------------------
- * Types (JSDoc, for readability)
- * ----------------------------
- */
-/**
- * @typedef {{ name: string, icon: string, explorer: string, chainId: string }} BridgeNetwork
- * @typedef {{ address: string, decimals: number }} TokenOnNetwork
- * @typedef {{ symbol: string, icon: string, networks: Record<string, TokenOnNetwork> }} BridgeToken
- * @typedef {{
- *   fromNetwork: BridgeNetwork,
- *   toNetwork: BridgeNetwork,
- *   token: BridgeToken,
- *   amount: string | number,
- *   account: string
- * }} BridgeDialogShowParams
- */
 
 /**
  * ----------------------------
@@ -403,10 +388,11 @@ const emit = defineEmits(['finish']);
  * ----------------------------
  */
 const store = useStore();
-const L2Rpc = computed(() => store.getters.L2Rpc);
 const Bridge = computed(() => store.getters.Bridge);
 const L1StandardBridge = computed(() => store.getters.L1StandardBridge);
 const L2StandardBridge = computed(() => store.getters.L2StandardBridge);
+const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
+const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
 /**
  * Dialog (global) state
@@ -476,7 +462,8 @@ const proveGasLimit = 400000n;
 const finalizeGasLimit = 400000n;
 
 const gasLoaded = ref(false);
-const currentGasPrice = ref(null);
+const currentL1GasPrice = ref(null);
+const currentL2GasPrice = ref(null);
 
 const L1Token = ref(null);
 const L2Token = ref(null);
@@ -529,7 +516,7 @@ async function loadData() {
 		// Not enough context yet; keep UI idle and wait for proper params.
 		return;
 	}
-	const allowance = await getTokenAllowance(L2Token.value.address, account.value, L2StandardBridge.value);
+	const allowance = await getTokenAllowance(L2ChainId.value, L2Token.value.address, account.value, L2StandardBridge.value);
 	if (allowance >= formatAmount(amount.value, L2Token.value.decimals)) {
 		steps[1] = STATUS.SUCCESS
 		steps[2] = STATUS.IDLE
@@ -538,25 +525,24 @@ async function loadData() {
 }
 
 async function loadGasCost() {
-	if (!L1Token.value || !L2Token.value) {
-		return;
-	}
+	// all is finish
 	if(steps[6] === STATUS.SUCCESS) {
 		return;
 	}
 
 	gasLoaded.value = false;
 	try {
-		const feeData = await getGasPrice();
-		currentGasPrice.value = feeData.maxFeePerGas + feeData.maxPriorityFeePerGas;
+		const feeDataL1 = await getL1GasPrice(L1ChainId.value);
+		const feeDataL2 = await getL2GasPrice(L2ChainId.value);
+		currentL1GasPrice.value = feeDataL1.maxFeePerGas;
+		currentL2GasPrice.value = feeDataL2.maxFeePerGas;
 		gasLoaded.value = true;
 	} catch (e) {
 	}
 }
 
-function getGasCostETH(gasLimit) {
-	if (!currentGasPrice.value) return '';
-	const totalFeeWei = currentGasPrice.value * gasLimit;
+function getGasCostETH(gasPrice, gasLimit) {
+	const totalFeeWei = gasPrice * gasLimit;
 	return Number(ethers.formatEther(totalFeeWei)).toPrecision(4);
 }
 
@@ -565,8 +551,8 @@ async function btnApprove() {
 
 	steps[1] = STATUS.LOADING
 	try {
-		await approveErc20(L2Token.value, L2StandardBridge.value, amount.value);
-		const allowance = await getTokenAllowance(L2Token.value.address, account.value, L2StandardBridge.value);
+		await approveErc20(L2ChainId.value, L2Token.value, L2StandardBridge.value, amount.value);
+		const allowance = await getTokenAllowance(L2ChainId.value, L2Rpc.value, L2Token.value.address, account.value, L2StandardBridge.value);
 		if (allowance >= formatAmount(amount.value, L2Token.value.decimals)) {
 			steps[1] = STATUS.SUCCESS;
 			steps[2] = STATUS.IDLE;
@@ -581,58 +567,58 @@ async function btnApprove() {
 	}
 }
 
-async function btnWithdraw() {
-	if (steps[2] !== STATUS.IDLE) return
-
-	steps[2] = STATUS.LOADING
-	try {
-		const receipt = await bridgeToken(L1StandardBridge.value, L1Token.value, L2Token.value.address, account.value, amount.value);
-		if (receipt?.status === 1) {
-			steps[2] = STATUS.SUCCESS
-			steps[3] = STATUS.IDLE;
-			ElMessage.success("Bridge submitted.");
-
-			l2Mint(receipt.hash);
-		} else {
-			steps[2] = STATUS.IDLE;
-			ElMessage.error("Bridge failed.");
-		}
-	} catch (e) {
-		steps[2] = STATUS.IDLE;
-		ElMessage.error("Bridge failed.");
-	}
-}
-
-async function l2Mint(txHash) {
-	if (steps[3] === STATUS.LOADING) return;
-
-	if (controller) {
-		controller.abort();
-		controller = null;
-	}
-	controller = new AbortController();
-
-	steps[3] = STATUS.LOADING;
-	try {
-		const result = await waitForL2ERC20Bridge(Bridge.value, txHash, L2Rpc.value, controller.signal);
-
-		steps[3] = STATUS.SUCCESS;
-		if (result.status === 'SUCCESS') {
-			steps[4] = STATUS.SUCCESS;
-			ElMessage.success("Bridge completed.");
-			emit('finish');
-		} else if (result.status === 'FAILED') {
-			steps[4] = STATUS.FAILED;
-			ElMessage.error("Bridge execution failed on L2.");
-		}
-	} catch (e) {
-		if (e?.name === 'AbortError' || controller?.signal?.aborted) {
-			return;
-		}
-		steps[3] = STATUS.DISABLED;
-		ElMessage.error("Unexpected error occurred.");
-	}
-}
+// async function btnWithdraw() {
+// 	if (steps[2] !== STATUS.IDLE) return
+//
+// 	steps[2] = STATUS.LOADING
+// 	try {
+// 		const receipt = await bridgeToken(L1StandardBridge.value, L1Token.value, L2Token.value.address, account.value, amount.value);
+// 		if (receipt?.status === 1) {
+// 			steps[2] = STATUS.SUCCESS
+// 			steps[3] = STATUS.IDLE;
+// 			ElMessage.success("Bridge submitted.");
+//
+// 			l2Mint(receipt.hash);
+// 		} else {
+// 			steps[2] = STATUS.IDLE;
+// 			ElMessage.error("Bridge failed.");
+// 		}
+// 	} catch (e) {
+// 		steps[2] = STATUS.IDLE;
+// 		ElMessage.error("Bridge failed.");
+// 	}
+// }
+//
+// async function l2Mint(txHash) {
+// 	if (steps[3] === STATUS.LOADING) return;
+//
+// 	if (controller) {
+// 		controller.abort();
+// 		controller = null;
+// 	}
+// 	controller = new AbortController();
+//
+// 	steps[3] = STATUS.LOADING;
+// 	try {
+// 		const result = await waitForL2ERC20Bridge(Bridge.value, txHash, L2Rpc.value, controller.signal);
+//
+// 		steps[3] = STATUS.SUCCESS;
+// 		if (result.status === 'SUCCESS') {
+// 			steps[4] = STATUS.SUCCESS;
+// 			ElMessage.success("Bridge completed.");
+// 			emit('finish');
+// 		} else if (result.status === 'FAILED') {
+// 			steps[4] = STATUS.FAILED;
+// 			ElMessage.error("Bridge execution failed on L2.");
+// 		}
+// 	} catch (e) {
+// 		if (e?.name === 'AbortError' || controller?.signal?.aborted) {
+// 			return;
+// 		}
+// 		steps[3] = STATUS.DISABLED;
+// 		ElMessage.error("Unexpected error occurred.");
+// 	}
+// }
 
 async function btnProve() {
 	ElMessage.info("Step not implemented yet (L2→L1 prove).");

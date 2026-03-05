@@ -1,8 +1,9 @@
-// src/utils/walletManager.js
 import store from '@/app/store/index.js';
+import { NETWORKS } from "@/config/networks.js";
 import { ElMessage } from 'element-plus';
 
-const getTargetL1 = () => store.state.activeEnvId;
+const getL1Id = () => store.state.l1ChainId.toLowerCase();
+const getL2Id = () => store.state.l2ChainId.toLowerCase();
 
 export function initWalletEvents() {
     if (!window.ethereum) return;
@@ -14,6 +15,16 @@ export function initWalletEvents() {
     });
 }
 
+function formatAddChainParams(networkConfig) {
+    return {
+        chainId: networkConfig.chainId,
+        chainName: networkConfig.name,
+        nativeCurrency: networkConfig.nativeCurrency,
+        rpcUrls: networkConfig.rpcUrls,
+        blockExplorerUrls: [networkConfig.explorer],
+    };
+}
+
 export async function connectWallet() {
     if (!window.ethereum) {
         ElMessage.error('Can\'t connect: no wallet provider')
@@ -21,12 +32,29 @@ export async function connectWallet() {
     }
 
     try {
-        const targetId = getTargetL1();
+        const l1 = getL1Id();
+        const l2 = getL2Id();
+
+        // add network
+        try {
+            await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [formatAddChainParams(NETWORKS[l2])]
+            });
+        } catch (e) {
+            if (e.code === 4001) {
+                ElMessage.error('User rejected: L2 network is required for bridging.');
+                return;
+            }
+            console.log("L2 Network already exists or internal, moving on...");
+        }
+
+        // switch network
         const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
-        if (currentChainId !== targetId) {
+        if (currentChainId !== l1) {
             await window.ethereum.request({
                 method: 'wallet_switchEthereumChain',
-                params: [{ chainId: targetId }],
+                params: [{ chainId: l1 }],
             });
         }
         const accounts = await window.ethereum.request({
@@ -34,7 +62,7 @@ export async function connectWallet() {
         });
 
         await store.dispatch('setAccount', accounts[0] || null)
-        await store.dispatch('setChainId', targetId);
+        await store.dispatch('setChainId', l1);
     } catch (error) {
         if (error.code === 4001) {
             ElMessage.error('User rejected');
@@ -42,35 +70,4 @@ export async function connectWallet() {
             ElMessage.error('Connection Error: ' + error.message);
         }
     }
-}
-
-export async function ensureNetwork(targetHexId, params) {
-    if (!window.ethereum) return;
-
-    const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
-    if (currentChainId.toLowerCase() !== targetHexId.toLowerCase()) {
-        try {
-            await window.ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: targetHexId }],
-            });
-        } catch (error) {
-            if (error.code === 4902) {
-                await window.ethereum.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [params]
-                })
-                //    params: [{
-                //                         chainId: network.chainId,
-                //                         chainName: network.name,
-                //                         rpcUrls: [network.rpc],
-                //                         // ...其他参数
-                //                     }],
-            } else {
-                ElMessage.error('Switch network failed: ' + error.message);
-                return false;
-            }
-        }
-    }
-    return true;
 }

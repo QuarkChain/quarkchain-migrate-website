@@ -56,10 +56,16 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ethers } from 'ethers'
 import { useStore } from 'vuex'
-import { getErc20Balance, getL2QKCBalance } from '@/services/migration/nativeMigration.js'
+import { getL1Erc20Balance, getL2QKCBalance } from '@/services/migration/nativeMigration.js'
 import CrossChainDialog from '@/ui/components/CrossChainDialog.vue'
 
 const store = useStore()
+const account = computed(() => store.state.account)
+const Conversion = computed(() => store.getters.Conversion);
+const OldToken = computed(() => store.getters.OldToken);
+const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
+const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
+
 const progressDialog = ref(null)
 
 const oldBalance = ref(0n)
@@ -67,10 +73,6 @@ const newBalance = ref(0n)
 const isFetching = ref(false)
 const input = ref('')
 
-const account = computed(() => store.state.account)
-const Conversion = computed(() => store.getters.Conversion);
-const OldToken = computed(() => store.getters.OldToken);
-const L2Rpc = computed(() => store.getters.L2Rpc);
 
 const oldBalStr = computed(() => {
 	if (account.value) {
@@ -108,7 +110,7 @@ const isButtonDisabled = computed(() => {
 })
 
 const accountAndTokensReady = computed(
-		() => !!(account.value && OldToken.value && L2Rpc.value)
+		() => !!(account.value && Conversion.value)
 )
 
 watch(accountAndTokensReady, async (ready) => {
@@ -126,8 +128,8 @@ async function fetchBalances() {
 	isFetching.value = true
 	try {
 		const [oldToken, newToken] = await Promise.all([
-			getErc20Balance(OldToken.value, account.value),
-			getL2QKCBalance(L2Rpc.value, account.value),
+			getL1Erc20Balance(L1ChainId.value, OldToken.value, account.value),
+			getL2QKCBalance(L2ChainId.value, account.value),
 		])
 		oldBalance.value = oldToken
 		newBalance.value = newToken
@@ -137,14 +139,7 @@ async function fetchBalances() {
 }
 
 function clickButton() {
-	progressDialog.value.show({
-		amount: input.value,
-		balance: oldBalance.value,
-		account: account.value,
-		conversion: Conversion.value,
-		oldToken: OldToken.value,
-		l2Rpc: L2Rpc.value,
-	})
+	progressDialog.value.show(input.value, oldBalance.value);
 }
 
 function onFinish() {
@@ -153,7 +148,6 @@ function onFinish() {
 
 let timer
 onMounted(() => {
-	fetchBalances()
 	timer = setInterval(fetchBalances, 30000)
 })
 

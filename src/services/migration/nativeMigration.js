@@ -1,45 +1,41 @@
 import { ethers } from "ethers";
 import { CONVERT_ABI } from "@/config/abi.js";
 import { getL1Provider, getL2Provider, getSigner } from "@/infra/provider/providerManager.js";
-import {getErc20Contract, getBalance, getAllowance, approve } from "@/infra/erc20/erc20.js";
+import { getBalance, getAllowance, approve } from "@/infra/erc20/erc20.js";
 
 // query
-export async function getErc20Balance(tokenAddress, userAddress) {
-    const provider = getL1Provider();
-    const contract = getErc20Contract(tokenAddress, provider);
-    return getBalance(contract, userAddress);
+export async function getL1Erc20Balance(l1ChainId, tokenAddress, userAddress) {
+    const provider = getL1Provider(l1ChainId);
+    return getBalance(tokenAddress, provider, userAddress);
 }
 
-export async function getErc20Allowance(tokenAddress, userAddress, convertAddress) {
-    const provider = getL1Provider();
-    const contract = getErc20Contract(tokenAddress, provider);
-    return getAllowance(contract, userAddress, convertAddress);
+export async function getL1Erc20Allowance(l1ChainId, tokenAddress, userAddress, convertAddress) {
+    const provider = getL1Provider(l1ChainId);
+    return getAllowance(tokenAddress, provider, userAddress, convertAddress);
 }
 
-export async function getL2QKCBalance(rpc, userAddress) {
-    const provider = getL2Provider(rpc);
+export async function getL2QKCBalance(l2ChainId, userAddress) {
+    const provider = getL2Provider(l2ChainId);
     return provider.getBalance(userAddress);
 }
 
 // send
-export async function approveErc20(tokenAddress, convertAddress, amount) {
-    const signer = await getSigner();
-    const contract = getErc20Contract(tokenAddress, signer);
-    return approve(contract, convertAddress, ethers.parseEther(amount));
+export async function approveErc20(l1ChainId, tokenAddress, convertAddress, amount) {
+    const signer = await getSigner(l1ChainId);
+    return approve(tokenAddress, signer, convertAddress, ethers.parseEther(amount));
 }
 
 function isSystemSender(address) {
     return address?.toLowerCase().startsWith("0xdeaddeaddeaddeaddeaddeaddeaddead");
 }
 
-export async function convert(convertAddress, amount) {
-    const signer = await getSigner();
+export async function convert(l1ChainId, convertAddress, amount) {
+    const signer = await getSigner(l1ChainId);
     const contract = new ethers.Contract(convertAddress, CONVERT_ABI, signer);
     const estimatedGas = await contract.convert.estimateGas(ethers.parseEther(amount));
-    const tx = await contract.convert(ethers.parseEther(amount), {
+    return await contract.convert(ethers.parseEther(amount), {
         gasLimit: estimatedGas * 15n / 10n
     });
-    return await tx.wait();
 }
 
 const INTERVAL = 3000;
@@ -49,8 +45,8 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function waitForL2Mint(rpc, userAddress) {
-    const provider = new ethers.JsonRpcProvider(rpc);
+export async function waitForL2Mint(l2ChainId, userAddress) {
+    const provider = getL2Provider(l2ChainId);
     const user = userAddress.toLowerCase();
     let lastCheckedBlock = await provider.getBlockNumber() - 1;
 

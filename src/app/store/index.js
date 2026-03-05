@@ -1,30 +1,39 @@
 import { createStore } from 'vuex';
-import { chains } from '@/config/chains.js';
+import { NETWORKS } from "@/config/networks.js";
+import { CONTRACTS } from "@/config/contracts.js";
 
 export default createStore({
   state() {
+    const activeEnvId = import.meta.env.TARGET_L1_CHAIN_ID || '0xaa36a7'
+    const l1ChainId = activeEnvId
+    const l2ChainId = activeEnvId === '0x1' ? '0x186ab' : '0x1adbb'
+
     return {
-      activeEnvId: import.meta.env.TARGET_L1_CHAIN_ID || '0xaa36a7',
+      activeEnvId,
+      l1ChainId,
+      l2ChainId,
       account: '',
-      chainId: '',
-    };
+      walletChainId: '',
+    }
   },
   getters: {
-    currentConfig: (state) => {
-      return chains.find(v => v.chainID === state.activeEnvId) || {};
-    },
-    Conversion: (state, getters) => getters.currentConfig.Conversion || null,
-    OldToken: (state, getters) => getters.currentConfig.OldToken || null,
-    L2Rpc: (state, getters) => getters.currentConfig.L2Rpc || null,
+    isWalletConnected: (state) => !!state.account,
+    isOnL1: (state) => BigInt(state.walletChainId || 0) === BigInt(state.l1ChainId),
+    isOnL2: (state) => BigInt(state.walletChainId || 0) === BigInt(state.l2ChainId),
 
-    Bridge: (state, getters) => getters.currentConfig.Bridge || {},
-    L1StandardBridge: (state, getters) => getters.currentConfig.Bridge?.L1StandardBridge || null,
-    L2StandardBridge: (state, getters) => getters.currentConfig.Bridge?.L2StandardBridge || null,
-    L2ToL1MessagePasser: (state, getters) => getters.currentConfig.Bridge?.L2ToL1MessagePasser || null,
+    // ----------------------
+    // Contract / Bridge
+    // ----------------------
+    Conversion: (state) => CONTRACTS[state.l1ChainId].Conversion || {},
+    OldToken: (state) => CONTRACTS[state.l1ChainId].OldToken || {},
+
+    Bridge: (state) => CONTRACTS[state.l1ChainId].Bridge || {},
+    L1StandardBridge: (state, getters) => getters.Bridge.L1StandardBridge || null,
+    L2StandardBridge: (state, getters) => getters.Bridge.L2StandardBridge || null,
   },
   mutations: {
     SET_ACCOUNT: (state, p) => state.account = p,
-    SET_CHAIN: (state, id) => state.chainId = id,
+    SET_CHAIN: (state, id) => state.walletChainId = id,
   },
   actions: {
     setAccount({ commit }, p) { commit('SET_ACCOUNT', p); },
