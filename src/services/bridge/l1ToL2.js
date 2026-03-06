@@ -5,8 +5,8 @@ import { L1_BRIDGE_ABI, L1_MESSENGER_ABI, L2_MESSENGER_ABI } from "@/config/abi.
 
 export async function getGasPrice(L1ChainId) {
 	const provider = getL1Provider(L1ChainId);
-	const raw = await provider.send("eth_gasPrice", []);
-	return BigInt(raw);
+	const fee = await provider.getFeeData();
+	return fee.gasPrice;
 }
 
 export async function getTokenAllowance(L1ChainId, tokenAddress, owner, spender) {

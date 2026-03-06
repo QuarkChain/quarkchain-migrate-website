@@ -18,7 +18,7 @@ export function getL1Provider(targetChainId) {
 			staticNetwork: true
 		}),
 		priority: index,
-		stallTimeout: 2500,
+		stallTimeout: 1200,
 		weight: 1
 	}));
 	return new ethers.FallbackProvider(configs);

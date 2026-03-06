@@ -8,11 +8,11 @@ export const NETWORKS = {
 		name: 'Ethereum',
 		icon: ethereumIcon,
 		rpcUrls: [
-			'https://eth.llamarpc.com',
-			'https://1rpc.io/eth',
-			'https://rpc.ankr.com/eth',
 			'https://ethereum.publicnode.com',
-			'https://ethereum.public.blockpi.network/v1/rpc/public'
+			'https://eth.merkle.io',
+			'https://rpc.ankr.com/eth',
+			'https://eth.llamarpc.com',
+			'https://1rpc.io/eth'
 		],
 		explorer: 'https://etherscan.io',
 		nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
@@ -24,12 +24,10 @@ export const NETWORKS = {
 		name: 'Sepolia',
 		icon: ethereumIcon,
 		rpcUrls: [
-			'https://1rpc.io/sepolia',
-			'https://0xrpc.io/sep',
-			'https://eth-sepolia.api.onfinality.io/public',
-			'https://sepolia.gateway.tenderly.co',
 			'https://ethereum-sepolia-rpc.publicnode.com',
-			'https://ethereum-sepolia.rpc.subquery.network/public'
+			'https://sepolia.gateway.tenderly.co',
+			'https://11155111.rpc.thirdweb.com',
+			'https://1rpc.io/sepolia'
 		],
 		explorer: 'https://sepolia.etherscan.io',
 		nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 }

@@ -522,6 +522,17 @@ function getGasCostETH(gasPrice, gasLimit) {
 	return Number(ethString).toFixed(8).replace(/\.?0+$/, '');
 }
 
+async function switchToL1() {
+	try {
+		await window.ethereum.request({
+			method: "wallet_switchEthereumChain",
+			params: [{ chainId: L1ChainId.value }]
+		});
+	} catch (err) {
+		console.warn("User rejected chain switch");
+	}
+}
+
 async function btnWithdraw() {
 	if (steps[1] !== STATUS.IDLE) return;
 
@@ -549,6 +560,8 @@ async function btnWithdraw() {
 		console.error('Withdraw error:', e);
 		steps[1] = STATUS.IDLE;
 		ElMessage.error("Bridge failed.");
+	} finally {
+		await switchToL1();
 	}
 }
 

@@ -7,8 +7,8 @@ import { getPublicClientL1, getPublicClientL2, getWalletClient } from "@/infra/v
 // get
 export async function getL1GasPrice(L1ChainId) {
 	const provider = getL1Provider(L1ChainId);
-	const raw = await provider.send("eth_gasPrice", []);
-	return BigInt(raw);
+	const fee = await provider.getFeeData();
+	return fee.gasPrice;
 }
 
 export async function getL2GasPrice(L2ChainId) {
