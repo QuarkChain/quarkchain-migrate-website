@@ -215,7 +215,7 @@
 						</div>
 						<div class="step-right">
 							<el-row v-if="steps[2] === STATUS.LOADING">
-								<span class="countdown-text">{{ formattedCountdown }}</span>
+								<span class="countdown-text">{{ formattedProveCountdown }}</span>
 								<div style="margin-left:8px;" class="status-loading" />
 							</el-row>
 							<div v-else-if="steps[2] === STATUS.SUCCESS"
@@ -274,8 +274,10 @@
 							</div>
 						</div>
 						<div class="step-right">
-							<div v-if="steps[4] === STATUS.LOADING"
-									 class="status-loading" />
+							<el-row v-if="steps[4] === STATUS.LOADING">
+								<span class="countdown-text">{{ formattedFinalizeCountdown }}</span>
+								<div style="margin-left:8px;" class="status-loading" />
+							</el-row>
 							<div v-else-if="steps[4] === STATUS.SUCCESS"
 									 class="status-success">
 								✓
@@ -310,7 +312,7 @@
 											v-if="steps[5] === STATUS.IDLE || steps[5] === STATUS.DISABLED"
 											class="right-btn"
 											:disabled="steps[5] === STATUS.DISABLED"
-											@click="btnFinalizeGet"
+											@click="btnFinalize"
 									>
 										Get
 									</el-button>
@@ -336,11 +338,16 @@ import { Wallet, InfoFilled, Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import {
-	getL1GasPrice, getL2GasPrice, bridgeTokenToL1, checkCanProve
+	getL1GasPrice,
+	getL2GasPrice,
+	bridgeTokenToL1,
+	checkProveStatus,
+	proveWithdrawal,
+	checkFinalizeStatus,
+	finalizeWithdrawal
 } from "@/services/bridge/l2ToL1.js";
 
 const emit = defineEmits(['finish']);
-
 
 /**
  * ----------------------------
@@ -348,8 +355,6 @@ const emit = defineEmits(['finish']);
  * ----------------------------
  */
 const store = useStore();
-const Bridge = computed(() => store.getters.Bridge);
-const L1StandardBridge = computed(() => store.getters.L1StandardBridge);
 const L2StandardBridge = computed(() => store.getters.L2StandardBridge);
 const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
 const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
@@ -393,7 +398,6 @@ const allChecked = computed(() => checkedStates.value.every(Boolean));
  */
 const checked = ref(false);
 
-
 /**
  * Page 4 (tx steps) state
  */
@@ -405,14 +409,13 @@ const STATUS = {
 	FAILED: 'failed',
 }
 const createInitialSteps = () => ({
-	1: STATUS.IDLE,
-	2: STATUS.DISABLED,
-	3: STATUS.DISABLED,
-	4: STATUS.DISABLED,
-	5: STATUS.DISABLED,
+	1: STATUS.IDLE,      // withdraw
+	2: STATUS.DISABLED,  // waite prove（loading）
+	3: STATUS.DISABLED,  // prove button
+	4: STATUS.DISABLED,  // waite finalize（loading）
+	5: STATUS.DISABLED,  // finalize button
 })
 const steps = reactive(createInitialSteps())
-
 
 /** -----------Bridge runtime params (derived from page1 context)----------------- */
 const withdrawGasLimit = 1421026n;
@@ -426,25 +429,41 @@ const currentL2GasPrice = ref(null);
 const L1Token = ref(null);
 const L2Token = ref(null);
 
-// prove status
-const remainingSeconds = ref(0);
+const currentL2TxHash = ref(null);
+
+// time（prove | finalize）
+const proveRemainingSeconds = ref(0);
+const finalizeRemainingSeconds = ref(0);
+
+// poll
 let provePollTimer = null;
-let countdownTimer = null;
+let finalizePollTimer = null;
+let countdownTimerProve = null;
+let countdownTimerFinalize = null;
 
 /** -------------Utils--------------- */
-const formattedCountdown = computed(() => {
-	const s = remainingSeconds.value;
-	if (s <= 0) return "";
+function formatRemainingTime(seconds) {
+	if (seconds <= 0) return '';
 
-	const hours = s / 3600;
-	if (hours > 1) {
-		const ceilHours = Math.ceil(hours);
-		return `~${ceilHours} ${ceilHours > 1 ? 'hours' : 'hour'}`;
+	const SECONDS_PER_MINUTE = 60;
+	const SECONDS_PER_HOUR = 3600;
+	const SECONDS_PER_DAY = 86400;
+
+	if (seconds >= SECONDS_PER_DAY) {
+		const days = Math.ceil(seconds / SECONDS_PER_DAY);
+		return `~${days} ${days > 1 ? 'days' : 'day'}`;
 	}
 
-	const ceilMins = Math.ceil(s / 60);
-	return `~${ceilMins} mins`;
-});
+	if (seconds >= SECONDS_PER_HOUR) {
+		const hours = Math.ceil(seconds / SECONDS_PER_HOUR);
+		return `~${hours} ${hours > 1 ? 'hours' : 'hour'}`;
+	}
+
+	const mins = Math.ceil(seconds / SECONDS_PER_MINUTE);
+	return `~${mins} mins`;
+}
+const formattedProveCountdown = computed(() => formatRemainingTime(proveRemainingSeconds.value));
+const formattedFinalizeCountdown = computed(() => formatRemainingTime(finalizeRemainingSeconds.value));
 
 /** -------------Public API--------------- */
 function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc }) {
@@ -453,6 +472,9 @@ function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: 
 	checkedStates.value = [false, false, false];
 	checked.value = false;
 	Object.assign(steps, createInitialSteps());
+	proveRemainingSeconds.value = 0;
+	finalizeRemainingSeconds.value = 0;
+	currentL2TxHash.value = null;
 
 	// context (page 1)
 	fromNetwork.value = fn;
@@ -479,10 +501,9 @@ function goPrevPage() {
 
 async function loadGasCost() {
 	// all is finish
-	if(steps[6] === STATUS.SUCCESS) {
+	if(steps[5] === STATUS.SUCCESS) {
 		return;
 	}
-
 	gasLoaded.value = false;
 	try {
 		const gasPrice1 = await getL1GasPrice(L1ChainId.value);
@@ -491,6 +512,7 @@ async function loadGasCost() {
 		currentL2GasPrice.value = gasPrice2;
 		gasLoaded.value = true;
 	} catch (e) {
+		console.error('Gas load error:', e);
 	}
 }
 
@@ -505,19 +527,26 @@ async function btnWithdraw() {
 
 	steps[1] = STATUS.LOADING;
 	try {
-		const receipt = await bridgeTokenToL1(L2ChainId.value, L2StandardBridge.value, L2Token.value, account.value, amount.value);
+		const receipt = await bridgeTokenToL1(
+				L2ChainId.value,
+				L2StandardBridge.value,
+				L2Token.value,
+				account.value,
+				amount.value
+		);
 		if (receipt?.status === 1) {
-			steps[1] = STATUS.SUCCESS
+			steps[1] = STATUS.SUCCESS;
 			steps[2] = STATUS.LOADING;
 			ElMessage.success("Bridge submitted.");
 
-			remainingSeconds.value = 14 * 3600;
+			currentL2TxHash.value = receipt.hash;
 			startProvePolling(receipt.hash);
 		} else {
 			steps[1] = STATUS.IDLE;
 			ElMessage.error("Transaction reverted.");
 		}
 	} catch (e) {
+		console.error('Withdraw error:', e);
 		steps[1] = STATUS.IDLE;
 		ElMessage.error("Bridge failed.");
 	}
@@ -525,91 +554,137 @@ async function btnWithdraw() {
 
 async function startProvePolling(hash) {
 	const poll = async () => {
-		const { L1DisputeGameFactoryProxy }  = Bridge.value;
-		const result = await checkCanProve(L1ChainId.value, L2ChainId.value, hash, L1DisputeGameFactoryProxy);
-		if (result.canProve) {
-			steps[2] = STATUS.SUCCESS;
-			steps[3] = STATUS.IDLE;
-			clearInterval(provePollTimer);
-			clearInterval(countdownTimer);
-			remainingSeconds.value = 0;
-		} else {
-			remainingSeconds.value = result.estimateSeconds;
+		try {
+			const result = await checkProveStatus(hash, L1ChainId.value, L2ChainId.value);
+			if (result.canProve) {
+				steps[2] = STATUS.SUCCESS;
+				steps[3] = STATUS.IDLE;
+				clearInterval(provePollTimer);
+				clearInterval(countdownTimerProve);
+				proveRemainingSeconds.value = 0;
+			} else {
+				proveRemainingSeconds.value = result.seconds;
+			}
+		} catch (e) {
+			console.error('Prove poll error:', e);
 		}
 	};
 
 	await poll();
 
 	provePollTimer = setInterval(poll, 60000);
-	countdownTimer = setInterval(() => {
-		if (remainingSeconds.value > 0) {
-			remainingSeconds.value--;
+	countdownTimerProve = setInterval(() => {
+		if (proveRemainingSeconds.value > 0) {
+			proveRemainingSeconds.value--;
 		}
 	}, 1000);
 }
 
 async function btnProve() {
-	if (steps[3] !== STATUS.IDLE) return;
+	if (steps[3] !== STATUS.IDLE || !currentL2TxHash.value) return;
 
 	steps[3] = STATUS.LOADING;
 	try {
-		const receipt = await bridgeTokenToL1(L2ChainId.value, L2StandardBridge.value, L2Token.value, account.value, amount.value);
-		if (receipt?.status === 1) {
-			steps[1] = STATUS.SUCCESS
-			steps[2] = STATUS.LOADING;
-			ElMessage.success("Bridge submitted.");
-
-			remainingSeconds.value = 14 * 3600;
-			startProvePolling(receipt.hash);
+		const receipt = await proveWithdrawal(
+				currentL2TxHash.value,
+				L1ChainId.value,
+				L2ChainId.value
+		);
+		if (receipt?.status === 'success' || receipt?.status === 1) {
+			steps[3] = STATUS.SUCCESS;
+			steps[4] = STATUS.LOADING;
+			ElMessage.success(`Prove success.`);
+			startFinalizePolling(currentL2TxHash.value);
 		} else {
-			steps[1] = STATUS.IDLE;
+			steps[3] = STATUS.IDLE;
 			ElMessage.error("Transaction reverted.");
 		}
 	} catch (e) {
+		console.error('Prove error:', e);
 		steps[3] = STATUS.IDLE;
 		ElMessage.error("Prove failed.");
 	}
 }
 
-async function btnFinalizeGet() {
-	ElMessage.info("Step not implemented yet (L2→L1 finalize).");
+async function startFinalizePolling(hash) {
+	const poll = async () => {
+		try {
+			const result = await checkFinalizeStatus(hash, Number(L1ChainId.value), Number(L2ChainId.value));
+			if (result.canFinalize) {
+				steps[4] = STATUS.SUCCESS;
+				steps[5] = STATUS.IDLE;
+				clearInterval(finalizePollTimer);
+				clearInterval(countdownTimerFinalize);
+				finalizeRemainingSeconds.value = 0;
+			} else {
+				finalizeRemainingSeconds.value = result.seconds;
+			}
+		} catch (e) {
+			console.error('Finalize poll error:', e);
+		}
+	};
+
+	await poll();
+
+	finalizePollTimer = setInterval(poll, 60000);
+	countdownTimerFinalize = setInterval(() => {
+		if (finalizeRemainingSeconds.value > 0) {
+			finalizeRemainingSeconds.value--;
+		}
+	}, 1000);
 }
 
-let gasTimer
+async function btnFinalize() {
+	if (steps[5] !== STATUS.IDLE || !currentL2TxHash.value) return;
+
+	steps[5] = STATUS.LOADING;
+	try {
+		const receipt = await finalizeWithdrawal(
+				currentL2TxHash.value,
+				Number(L1ChainId.value),
+				Number(L2ChainId.value)
+		);
+		if (receipt?.status === 'success' || receipt?.status === 1) {
+			ElMessage.success(`Finalize withdraw success`);
+			steps[5] = STATUS.SUCCESS;
+			emit('finish');
+		} else {
+			steps[5] = STATUS.IDLE;
+			ElMessage.error("Transaction reverted.");
+		}
+	} catch (e) {
+		console.error('Finalize error:', e);
+		steps[5] = STATUS.IDLE;
+		ElMessage.error("Finalize failed.");
+	}
+}
+
+// clear
+let gasTimer;
 watch(visible, (val) => {
 	if (val) {
 		if (gasTimer) clearInterval(gasTimer);
-
 		loadGasCost();
 		gasTimer = setInterval(loadGasCost, 30000);
 	} else {
 		clearInterval(gasTimer);
-
-		if (provePollTimer) {
-			clearInterval(provePollTimer);
-			provePollTimer = null;
-		}
-		if (countdownTimer) {
-			clearInterval(countdownTimer);
-			countdownTimer = null;
-		}
-		remainingSeconds.value = 0;
+		[provePollTimer, finalizePollTimer, countdownTimerProve, countdownTimerFinalize].forEach(timer => {
+			if (timer) clearInterval(timer);
+		});
+		provePollTimer = finalizePollTimer = countdownTimerProve = countdownTimerFinalize = null;
+		proveRemainingSeconds.value = 0;
+		finalizeRemainingSeconds.value = 0;
 	}
 });
 
 onUnmounted(() => {
-	if (provePollTimer) {
-		clearInterval(provePollTimer);
-		provePollTimer = null;
-	}
-	if (countdownTimer) {
-		clearInterval(countdownTimer);
-		countdownTimer = null;
-	}
+	[provePollTimer, finalizePollTimer, countdownTimerProve, countdownTimerFinalize].forEach(timer => {
+		if (timer) clearInterval(timer);
+	});
 	if (gasTimer) clearInterval(gasTimer);
 });
 
-defineExpose({show})
+defineExpose({ show });
 </script>
 
 <style scoped lang="less">
