@@ -210,12 +210,14 @@
 						<div class="step-left">
 							<img class="step-icon" src="@/assets/time.svg" alt="l1-network-icon" />
 							<div class="step-text">
-								<div class="step-title">Wait ~{{ provenTime }} hours</div>
+								<div class="step-title">Wait ~14 hours</div>
 							</div>
 						</div>
 						<div class="step-right">
-							<div v-if="steps[2] === STATUS.LOADING"
-									 class="status-loading" />
+							<el-row v-if="steps[2] === STATUS.LOADING">
+								<span class="countdown-text">{{ formattedCountdown }}</span>
+								<div style="margin-left:8px;" class="status-loading" />
+							</el-row>
 							<div v-else-if="steps[2] === STATUS.SUCCESS"
 									 class="status-success">
 								✓
@@ -268,7 +270,7 @@
 						<div class="step-left">
 							<img class="step-icon" src="@/assets/time.svg" alt="l1-network-icon" />
 							<div class="step-text">
-								<div class="step-title">Wait ~{{ withdrawTime }} days</div>
+								<div class="step-title">Wait ~7 days</div>
 							</div>
 						</div>
 						<div class="step-right">
@@ -328,13 +330,13 @@
 
 <script setup>
 import { ethers } from 'ethers';
-import { computed, watch, ref, reactive } from 'vue';
+import { computed, watch, ref, reactive, onUnmounted } from 'vue';
 import { useStore } from "vuex";
 import { Wallet, InfoFilled, Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import {
-	getL1GasPrice, getL2GasPrice, bridgeTokenToL1
+	getL1GasPrice, getL2GasPrice, bridgeTokenToL1, checkCanProve
 } from "@/services/bridge/l2ToL1.js";
 
 const emit = defineEmits(['finish']);
@@ -424,12 +426,25 @@ const currentL2GasPrice = ref(null);
 const L1Token = ref(null);
 const L2Token = ref(null);
 
-const provenTime = ref(14);
-const withdrawTime = ref(7);
+// prove status
+const remainingSeconds = ref(0);
+let provePollTimer = null;
+let countdownTimer = null;
 
-// TODO
-let controller = null;
+/** -------------Utils--------------- */
+const formattedCountdown = computed(() => {
+	const s = remainingSeconds.value;
+	if (s <= 0) return "";
 
+	const hours = s / 3600;
+	if (hours > 1) {
+		const ceilHours = Math.ceil(hours);
+		return `~${ceilHours} ${ceilHours > 1 ? 'hours' : 'hour'}`;
+	}
+
+	const ceilMins = Math.ceil(s / 60);
+	return `~${ceilMins} mins`;
+});
 
 /** -------------Public API--------------- */
 function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc }) {
@@ -486,7 +501,7 @@ function getGasCostETH(gasPrice, gasLimit) {
 }
 
 async function btnWithdraw() {
-	if (steps[1] !== STATUS.IDLE) return
+	if (steps[1] !== STATUS.IDLE) return;
 
 	steps[1] = STATUS.LOADING;
 	try {
@@ -496,7 +511,8 @@ async function btnWithdraw() {
 			steps[2] = STATUS.LOADING;
 			ElMessage.success("Bridge submitted.");
 
-			// l2Mint(receipt.hash);
+			remainingSeconds.value = 14 * 3600;
+			startProvePolling(receipt.hash);
 		} else {
 			steps[1] = STATUS.IDLE;
 			ElMessage.error("Transaction reverted.");
@@ -507,39 +523,52 @@ async function btnWithdraw() {
 	}
 }
 
-// async function l2Mint(txHash) {
-// 	if (steps[3] === STATUS.LOADING) return;
-//
-// 	if (controller) {
-// 		controller.abort();
-// 		controller = null;
-// 	}
-// 	controller = new AbortController();
-//
-// 	steps[3] = STATUS.LOADING;
-// 	try {
-// 		const result = await waitForL2ERC20Bridge(Bridge.value, txHash, L2Rpc.value, controller.signal);
-//
-// 		steps[3] = STATUS.SUCCESS;
-// 		if (result.status === 'SUCCESS') {
-// 			steps[4] = STATUS.SUCCESS;
-// 			ElMessage.success("Bridge completed.");
-// 			emit('finish');
-// 		} else if (result.status === 'FAILED') {
-// 			steps[4] = STATUS.FAILED;
-// 			ElMessage.error("Bridge execution failed on L2.");
-// 		}
-// 	} catch (e) {
-// 		if (e?.name === 'AbortError' || controller?.signal?.aborted) {
-// 			return;
-// 		}
-// 		steps[3] = STATUS.DISABLED;
-// 		ElMessage.error("Unexpected error occurred.");
-// 	}
-// }
+async function startProvePolling(hash) {
+	const poll = async () => {
+		const { L1DisputeGameFactoryProxy }  = Bridge.value;
+		const result = await checkCanProve(L1ChainId.value, L2ChainId.value, hash, L1DisputeGameFactoryProxy);
+		if (result.canProve) {
+			steps[2] = STATUS.SUCCESS;
+			steps[3] = STATUS.IDLE;
+			clearInterval(provePollTimer);
+			clearInterval(countdownTimer);
+			remainingSeconds.value = 0;
+		} else {
+			remainingSeconds.value = result.estimateSeconds;
+		}
+	};
+
+	await poll();
+
+	provePollTimer = setInterval(poll, 60000);
+	countdownTimer = setInterval(() => {
+		if (remainingSeconds.value > 0) {
+			remainingSeconds.value--;
+		}
+	}, 1000);
+}
 
 async function btnProve() {
-	ElMessage.info("Step not implemented yet (L2→L1 prove).");
+	if (steps[3] !== STATUS.IDLE) return;
+
+	steps[3] = STATUS.LOADING;
+	try {
+		const receipt = await bridgeTokenToL1(L2ChainId.value, L2StandardBridge.value, L2Token.value, account.value, amount.value);
+		if (receipt?.status === 1) {
+			steps[1] = STATUS.SUCCESS
+			steps[2] = STATUS.LOADING;
+			ElMessage.success("Bridge submitted.");
+
+			remainingSeconds.value = 14 * 3600;
+			startProvePolling(receipt.hash);
+		} else {
+			steps[1] = STATUS.IDLE;
+			ElMessage.error("Transaction reverted.");
+		}
+	} catch (e) {
+		steps[3] = STATUS.IDLE;
+		ElMessage.error("Prove failed.");
+	}
 }
 
 async function btnFinalizeGet() {
@@ -548,13 +577,6 @@ async function btnFinalizeGet() {
 
 let gasTimer
 watch(visible, (val) => {
-	if (!val) {
-		if (controller) {
-			controller.abort();
-			controller = null;
-		}
-	}
-
 	if (val) {
 		if (gasTimer) clearInterval(gasTimer);
 
@@ -562,7 +584,29 @@ watch(visible, (val) => {
 		gasTimer = setInterval(loadGasCost, 30000);
 	} else {
 		clearInterval(gasTimer);
+
+		if (provePollTimer) {
+			clearInterval(provePollTimer);
+			provePollTimer = null;
+		}
+		if (countdownTimer) {
+			clearInterval(countdownTimer);
+			countdownTimer = null;
+		}
+		remainingSeconds.value = 0;
 	}
+});
+
+onUnmounted(() => {
+	if (provePollTimer) {
+		clearInterval(provePollTimer);
+		provePollTimer = null;
+	}
+	if (countdownTimer) {
+		clearInterval(countdownTimer);
+		countdownTimer = null;
+	}
+	if (gasTimer) clearInterval(gasTimer);
 });
 
 defineExpose({show})

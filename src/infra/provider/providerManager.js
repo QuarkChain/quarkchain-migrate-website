@@ -14,7 +14,9 @@ export function getL1Provider(targetChainId) {
 	}
 
 	const configs = rpcPool.map((url, index) => ({
-		provider: new ethers.JsonRpcProvider(url),
+		provider: new ethers.JsonRpcProvider(url, Number(targetChainId), {
+			staticNetwork: true
+		}),
 		priority: index,
 		stallTimeout: 2500,
 		weight: 1

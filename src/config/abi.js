@@ -19,7 +19,10 @@ export const L1_BRIDGE_ABI = [
 export const L1_MESSENGER_ABI = [
 	"event SentMessage(address indexed target, address sender, bytes message, uint256 messageNonce, uint256 gasLimit)"
 ];
-
+export const L1_OPTIMISM_PORTAL_ABI = [
+	"function proveWithdrawalTransaction((uint256,address,address,uint256,uint256,bytes),uint256,(bytes32,bytes32,bytes32,bytes32),bytes[]) external",
+	"function finalizeWithdrawalTransactionExternalProof((uint256,address,address,uint256,uint256,bytes),address) external"
+];
 
 // l2
 export const L2_MESSENGER_ABI = [
@@ -28,4 +31,8 @@ export const L2_MESSENGER_ABI = [
 ];
 export const L2_BRIDGE_ABI = [
 	"function withdrawTo(address _l2Token, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData) external",
+];
+export const L2_DISPUTE_GAME_ABI = [
+	"function gameCount() view returns (uint256)",
+	"function gameAtIndex(uint256 index) view returns (uint8, uint256, address)"
 ];
