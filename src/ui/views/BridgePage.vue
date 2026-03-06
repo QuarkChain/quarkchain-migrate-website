@@ -224,6 +224,15 @@ function handleBridge() {
 	if (isL1ToL2.value) {
 		progressDialogL1.value?.show(payload);
 	} else {
+		// // TODO
+		// progressDialogL2.value.show({
+		// 	...payload,
+		// 	txHash: '0x0854702cc671c56ce877d38373ac0a245178fcf886b4a14e53ac1dce7ad11aa1',
+		// 	historyStatus: {
+		// 		stage: 'finalize_ready',
+		// 		remainingSeconds: 7*24*60*60
+		// 	}
+		// })
 		progressDialogL2.value?.show(payload);
 	}
 }

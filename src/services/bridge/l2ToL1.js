@@ -91,14 +91,12 @@ export async function checkFinalizeStatus(l2TxHash, l1ChainId, l2ChainId) {
 }
 
 export async function finalizeWithdrawal(l2TxHash, l1ChainId, l2ChainId) {
-	const { pL2, receipt } = await extractWithdrawal(l2TxHash, l2ChainId);
-	const wL1 = await getWalletClient(l1ChainId);
+	const { pL2, withdrawal } = await extractWithdrawal(l2TxHash, l2ChainId);
 	const pL1 = getPublicClientL1(l1ChainId);
-	const args = await pL1.buildFinalizeWithdrawal({
-		receipt,
+	const wL1 = await getWalletClient(l1ChainId);
+	const hash = await wL1.finalizeWithdrawal({
+		withdrawal,
 		targetChain: pL2.chain,
 	});
-
-	const hash = await wL1.finalizeWithdrawal(args);
 	return await pL1.waitForTransactionReceipt({ hash });
 }

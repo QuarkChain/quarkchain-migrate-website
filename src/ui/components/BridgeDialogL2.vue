@@ -7,6 +7,7 @@
 	>
 		<div class="dialog-header">
 			<button
+					v-if="!isHistoryMode"
 					class="icon-btn"
 					:class="{ invisible: currentPage === 1 }"
 					@click="goPrevPage"
@@ -14,7 +15,7 @@
 				←
 			</button>
 
-			<div class="step-indicator">
+			<div v-if="!isHistoryMode" class="step-indicator">
 				<div :class="['dot', currentPage === 1 ? 'active' : '']"></div>
 				<div :class="['dot', currentPage === 2 ? 'active' : '']"></div>
 				<div :class="['dot', currentPage === 3 ? 'active' : '']"></div>
@@ -349,27 +350,25 @@ import {
 
 const emit = defineEmits(['finish']);
 
-/**
- * ----------------------------
- * Store deps
- * ----------------------------
- */
+// ----------------------------
+// Store deps
+// ----------------------------
 const store = useStore();
 const L2StandardBridge = computed(() => store.getters.L2StandardBridge);
 const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
 const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
-/**
- * Dialog (global) state
- */
+// ----------------------------
+// Dialog (global) state
+// ----------------------------
 const visible = ref(false);
 const currentPage = ref(1);
+const txHash = ref(null);
+const isHistoryMode = computed(() => !!txHash.value);
 
-/**
- * Page 1 (review) state
- *
- * This "context" is provided via `show()`.
- */
+// ----------------------------
+// Page 1 (review) state
+// ----------------------------
 const DEFAULT_NETWORK = { name: '', icon: '', explorer: '', chainId: '' };
 const DEFAULT_TOKEN = { symbol: '', icon: '', networks: {} };
 const fromNetwork = ref(null);
@@ -382,9 +381,9 @@ const safeFromNetwork = computed(() => fromNetwork.value || DEFAULT_NETWORK);
 const safeToNetwork = computed(() => toNetwork.value || DEFAULT_NETWORK);
 const safeToken = computed(() => token.value || DEFAULT_TOKEN);
 
-/**
- * Page 2 (acknowledgements) state
- */
+// ----------------------------
+// Page 2 (acknowledgements) state
+// ----------------------------
 const labels = computed(() => [
 	`I must complete 3 transactions, including 2 transactions on ${safeFromNetwork.value.name}`,
 	'Gas prices will fluctuate between transactions',
@@ -393,31 +392,33 @@ const labels = computed(() => [
 const checkedStates = ref([false, false, false]);
 const allChecked = computed(() => checkedStates.value.every(Boolean));
 
-/**
- * Page 3 (8 day wait acknowledgement) state
- */
+// ----------------------------
+// Page 3 (8 day wait acknowledgement) state
+// ----------------------------
 const checked = ref(false);
 
-/**
- * Page 4 (tx steps) state
- */
+// ----------------------------
+// Page 4 (tx steps) state
+// ----------------------------
 const STATUS = {
 	IDLE: 'idle',
 	LOADING: 'loading',
 	SUCCESS: 'success',
 	DISABLED: 'disabled',
 	FAILED: 'failed',
-}
+};
 const createInitialSteps = () => ({
 	1: STATUS.IDLE,      // withdraw
-	2: STATUS.DISABLED,  // waite prove（loading）
+	2: STATUS.DISABLED,  // wait prove
 	3: STATUS.DISABLED,  // prove button
-	4: STATUS.DISABLED,  // waite finalize（loading）
+	4: STATUS.DISABLED,  // wait finalize
 	5: STATUS.DISABLED,  // finalize button
-})
-const steps = reactive(createInitialSteps())
+});
+const steps = reactive(createInitialSteps());
 
-/** -----------Bridge runtime params (derived from page1 context)----------------- */
+// ----------------------------
+// Bridge runtime params
+// ----------------------------
 const withdrawGasLimit = 1421026n;
 const proveGasLimit = 400000n;
 const finalizeGasLimit = 400000n;
@@ -441,7 +442,9 @@ let finalizePollTimer = null;
 let countdownTimerProve = null;
 let countdownTimerFinalize = null;
 
-/** -------------Utils--------------- */
+// ----------------------------
+// Utils
+// ----------------------------
 function formatRemainingTime(seconds) {
 	if (seconds <= 0) return '';
 
@@ -453,28 +456,28 @@ function formatRemainingTime(seconds) {
 		const days = Math.ceil(seconds / SECONDS_PER_DAY);
 		return `~${days} ${days > 1 ? 'days' : 'day'}`;
 	}
-
 	if (seconds >= SECONDS_PER_HOUR) {
 		const hours = Math.ceil(seconds / SECONDS_PER_HOUR);
 		return `~${hours} ${hours > 1 ? 'hours' : 'hour'}`;
 	}
-
 	const mins = Math.ceil(seconds / SECONDS_PER_MINUTE);
 	return `~${mins} mins`;
 }
 const formattedProveCountdown = computed(() => formatRemainingTime(proveRemainingSeconds.value));
 const formattedFinalizeCountdown = computed(() => formatRemainingTime(finalizeRemainingSeconds.value));
 
-/** -------------Public API--------------- */
-function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc }) {
+// ----------------------------
+// Public API-------
+async function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc, txHash: incomingTxHash, historyStatus }) {
 	// reset (dialog + pages)
-	currentPage.value = 1;
+	currentPage.value = incomingTxHash ? 4 : 1;
 	checkedStates.value = [false, false, false];
 	checked.value = false;
 	Object.assign(steps, createInitialSteps());
 	proveRemainingSeconds.value = 0;
 	finalizeRemainingSeconds.value = 0;
-	currentL2TxHash.value = null;
+	currentL2TxHash.value = incomingTxHash || null;
+	txHash.value = incomingTxHash || null;
 
 	// context (page 1)
 	fromNetwork.value = fn;
@@ -489,11 +492,64 @@ function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: 
 
 	// status
 	visible.value = true;
+
 	loadGasCost();
+	if (incomingTxHash) {
+		if (historyStatus) {
+			initFromHistory(historyStatus);
+		} else {
+			console.warn('historyStatus is required when txHash is provided');
+		}
+	}
 }
 
-/** ----------- Methods ----------------- */
+// ----------------------------
+// Methods
+// ----------------------------
+function initFromHistory(status) {
+	// status：{ stage: 'wait_prove' | 'prove_ready' | 'wait_finalize' | 'finalize_ready' | 'completed', remainingSeconds?: number }
+	steps[1] = STATUS.SUCCESS;
+
+	switch (status.stage) {
+		case 'wait_prove':
+			steps[2] = STATUS.LOADING;
+			if (status.remainingSeconds !== undefined) {
+				proveRemainingSeconds.value = status.remainingSeconds;
+			}
+			startProvePolling(txHash.value);
+			break;
+		case 'prove_ready':
+			steps[2] = STATUS.SUCCESS;
+			steps[3] = STATUS.IDLE;
+			break;
+		case 'wait_finalize':
+			steps[2] = STATUS.SUCCESS;
+			steps[3] = STATUS.SUCCESS;
+			steps[4] = STATUS.LOADING;
+			if (status.remainingSeconds !== undefined) {
+				finalizeRemainingSeconds.value = status.remainingSeconds;
+			}
+			startFinalizePolling(txHash.value);
+			break;
+		case 'finalize_ready':
+			steps[2] = STATUS.SUCCESS;
+			steps[3] = STATUS.SUCCESS;
+			steps[4] = STATUS.SUCCESS;
+			steps[5] = STATUS.IDLE;
+			break;
+		case 'completed':
+			steps[2] = STATUS.SUCCESS;
+			steps[3] = STATUS.SUCCESS;
+			steps[4] = STATUS.SUCCESS;
+			steps[5] = STATUS.SUCCESS;
+			break;
+		default:
+			console.warn('Unknown history stage:', status.stage);
+	}
+}
+
 function goPrevPage() {
+	if (isHistoryMode.value) return;
 	if (currentPage.value > 1) {
 		currentPage.value -= 1;
 	}
@@ -502,6 +558,7 @@ function goPrevPage() {
 async function loadGasCost() {
 	// all is finish
 	if(steps[5] === STATUS.SUCCESS) {
+		if (gasTimer) clearInterval(gasTimer);
 		return;
 	}
 	gasLoaded.value = false;
@@ -622,7 +679,7 @@ async function btnProve() {
 async function startFinalizePolling(hash) {
 	const poll = async () => {
 		try {
-			const result = await checkFinalizeStatus(hash, Number(L1ChainId.value), Number(L2ChainId.value));
+			const result = await checkFinalizeStatus(hash, L1ChainId.value, L2ChainId.value);
 			if (result.canFinalize) {
 				steps[4] = STATUS.SUCCESS;
 				steps[5] = STATUS.IDLE;
@@ -654,8 +711,8 @@ async function btnFinalize() {
 	try {
 		const receipt = await finalizeWithdrawal(
 				currentL2TxHash.value,
-				Number(L1ChainId.value),
-				Number(L2ChainId.value)
+				L1ChainId.value,
+				L2ChainId.value
 		);
 		if (receipt?.status === 'success' || receipt?.status === 1) {
 			ElMessage.success(`Finalize withdraw success`);
