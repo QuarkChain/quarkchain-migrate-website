@@ -1,5 +1,4 @@
 import { createStore } from 'vuex';
-import { NETWORKS } from "@/config/networks.js";
 import { CONTRACTS } from "@/config/contracts.js";
 
 export default createStore({

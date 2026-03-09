@@ -46,14 +46,18 @@ export async function loadTransactions(address) {
 	return txs.sort((a, b) => b.timestamp - a.timestamp);
 }
 
-export async function loadProgress(address) {
+export async function loadProgress(address, layer) {
 	const db = await getDB();
 	return (
-			await db.get(PROGRESS_STORE, address)
-	) || { l1LastBlock: 0, l2LastBlock: 0 };
+			await db.get(PROGRESS_STORE, `${address}-${layer}`)
+	) || {lastBlock: 0};
 }
 
-export async function updateProgress(address, progress) {
+export async function updateProgress(address, layer, block) {
 	const db = await getDB();
-	await db.put(PROGRESS_STORE, progress, address);
+	await db.put(
+			PROGRESS_STORE,
+			{ lastBlock: block },
+			`${address}-${layer}`
+	);
 }
