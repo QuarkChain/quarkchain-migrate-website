@@ -1,17 +1,26 @@
+// src/infra/wallet/walletManager.js
 import store from '@/app/store/index.js';
 import { NETWORKS } from "@/config/networks.js";
 import { ElMessage } from 'element-plus';
+import { startSync, stopSync } from '@/services/history/syncManager.js';
 
 const getL1Id = () => store.state.l1ChainId.toLowerCase();
 const getL2Id = () => store.state.l2ChainId.toLowerCase();
 
 export function initWalletEvents() {
     if (!window.ethereum) return;
-    window.ethereum.on("accountsChanged", async (accounts) => {
-        await store.dispatch('setAccount', accounts[0] || null)
+    window.ethereum.on('accountsChanged', async (accounts) => {
+        const account = accounts[0] || null;
+        await store.dispatch('setAccount', account);
+
+        if (account) startSync(account);
+        else stopSync();
     });
     window.ethereum.on("chainChanged", async (chainId) => {
         await store.dispatch('setChainId', chainId)
+
+        const account = store.state.account;
+        if (account) startSync(account);
     });
 }
 

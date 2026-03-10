@@ -40,7 +40,7 @@ export async function parseLogs(logs, provider, direction, address) {
 	const blockCache = new Map();
 
 	const blockNumbers = [...new Set(logs.map(l => l.blockNumber))];
-	const limit = pLimit(10);
+	const limit = pLimit(5);
 	await Promise.all(
 			blockNumbers.map(bn =>
 					limit(async () => {
@@ -76,7 +76,16 @@ export async function parseLogs(logs, provider, direction, address) {
 const L1_WINDOW = 2000;
 const L2_WINDOW = 5000;
 
-async function syncL1(chainId, bridgeAddress, address) {
+function throwIfAborted(signal) {
+	if (signal?.aborted) {
+		const err = new Error("Sync aborted");
+		err.name = "AbortError";
+		throw err;
+	}
+}
+
+async function syncL1(chainId, bridgeAddress, address, opts = {}) {
+	const { signal, onChunk } = opts;
 	const progress = await loadProgress(address, "L1")
 
 	const provider = getL1Provider(chainId);
@@ -88,6 +97,7 @@ async function syncL1(chainId, bridgeAddress, address) {
 	if (latest <= from) return;
 
 	while (from <= latest) {
+		throwIfAborted(signal);
 		const to = Math.min(from + L1_WINDOW, latest);
 		const logs = await scanLogs(
 				provider,
@@ -96,6 +106,7 @@ async function syncL1(chainId, bridgeAddress, address) {
 				from,
 				to
 		);
+		throwIfAborted(signal);
 		const txs = await parseLogs(
 				logs,
 				provider,
@@ -105,12 +116,14 @@ async function syncL1(chainId, bridgeAddress, address) {
 
 		await saveTransactions(txs);
 		await updateProgress(address, "L1", to)
+		if (onChunk) await onChunk({ layer: "L1", fromBlock: from, toBlock: to, added: txs.length });
 
 		from = to + 1;
 	}
 }
 
-async function syncL2(chainId, bridgeAddress, address) {
+async function syncL2(chainId, bridgeAddress, address, opts = {}) {
+	const { signal, onChunk } = opts;
 	const progress = await loadProgress(address, "L2")
 
 	const provider = getL2Provider(chainId);
@@ -122,6 +135,7 @@ async function syncL2(chainId, bridgeAddress, address) {
 	if (latest <= from) return;
 
 	while (from <= latest) {
+		throwIfAborted(signal);
 		const to = Math.min(from + L2_WINDOW, latest);
 		const logs = await scanLogs(
 				provider,
@@ -130,6 +144,7 @@ async function syncL2(chainId, bridgeAddress, address) {
 				from,
 				to
 		);
+		throwIfAborted(signal);
 
 		const txs = await parseLogs(
 				logs,
@@ -140,14 +155,15 @@ async function syncL2(chainId, bridgeAddress, address) {
 
 		await saveTransactions(txs);
 		await updateProgress(address, "L2", to)
+		if (onChunk) await onChunk({ layer: "L2", fromBlock: from, toBlock: to, added: txs.length });
 
 		from = to + 1;
 	}
 }
 
-export async function syncUserTransactions(l1ChainId, l2ChainId, bridge,address) {
+export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, address, opts = {}) {
 	await Promise.all([
-		syncL1(l1ChainId, bridge.L1StandardBridge, address),
-		syncL2(l2ChainId, bridge.L2StandardBridge, address)
+		syncL1(l1ChainId, bridge.L1StandardBridge, address, opts),
+		syncL2(l2ChainId, bridge.L2StandardBridge, address, opts)
 	]);
 }

@@ -1,3 +1,4 @@
+// src/app/store/index.js
 import { createStore } from 'vuex';
 import { CONTRACTS } from "@/config/contracts.js";
 
