@@ -4,13 +4,13 @@ import { loadProgress, saveTransactions, updateProgress } from "./db.js";
 import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
 
 const L1_BRIDGE_DEPLOY_BLOCK = {
-	1: 23874421,      // Ethereum mainnet
-	11155111: 9605535 // Sepolia
+	'0x1': 23874421,      // Ethereum mainnet
+	'0xaa36a7': 9605535 // Sepolia
 }
 
 const L2_BRIDGE_DEPLOY_BLOCK = {
-	100011: 170563,    // QKC mainnet
-	110011: 169841      // QKC Sepolia
+	'0x186ab': 170563,    // QKC mainnet
+	'0x1adbb': 169841      // QKC Sepolia
 }
 
 const EVENT_TOPIC = ethers.id(
@@ -74,7 +74,7 @@ export async function parseLogs(logs, provider, direction, address) {
 }
 
 const L1_WINDOW = 2000;
-const L2_WINDOW = 5000;
+const L2_WINDOW = 10000;
 
 function throwIfAborted(signal) {
 	if (signal?.aborted) {
@@ -90,10 +90,7 @@ async function syncL1(chainId, bridgeAddress, address, opts = {}) {
 
 	const provider = getL1Provider(chainId);
 	const latest = (await provider.getBlockNumber()) - 2;
-	const chain = typeof chainId === "string"
-			? parseInt(chainId, 16)
-			: chainId;
-	let from = Math.max(progress.lastBlock + 1, L1_BRIDGE_DEPLOY_BLOCK[chain]);
+	let from = Math.max(progress.lastBlock + 1, L1_BRIDGE_DEPLOY_BLOCK[chainId]);
 	if (latest <= from) return;
 
 	while (from <= latest) {
@@ -128,10 +125,7 @@ async function syncL2(chainId, bridgeAddress, address, opts = {}) {
 
 	const provider = getL2Provider(chainId);
 	const latest = (await provider.getBlockNumber()) - 6;
-	const chain = typeof chainId === "string"
-			? parseInt(chainId, 16)
-			: chainId;
-	let from = Math.max(progress.lastBlock + 1, L2_BRIDGE_DEPLOY_BLOCK[chain]);
+	let from = Math.max(progress.lastBlock + 1, L2_BRIDGE_DEPLOY_BLOCK[chainId]);
 	if (latest <= from) return;
 
 	while (from <= latest) {

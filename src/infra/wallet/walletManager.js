@@ -72,6 +72,7 @@ export async function connectWallet() {
 
         await store.dispatch('setAccount', accounts[0] || null)
         await store.dispatch('setChainId', l1);
+        startSync(accounts[0]);
     } catch (error) {
         if (error.code === 4001) {
             ElMessage.error('User rejected');

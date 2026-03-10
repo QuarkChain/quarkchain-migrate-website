@@ -67,8 +67,8 @@ async function runPoll(account, mySession, signal) {
 
 	syncing.value = true;
 	try {
-		const l1ChainId = BigInt(store.state.l1ChainId);
-		const l2ChainId = BigInt(store.state.l2ChainId);
+		const l1ChainId = store.state.l1ChainId;
+		const l2ChainId = store.state.l2ChainId;
 		const bridge = store.getters.Bridge;
 		await syncUserTransactions(l1ChainId, l2ChainId, bridge, account, {
 			signal,

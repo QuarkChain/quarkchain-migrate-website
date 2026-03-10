@@ -7,11 +7,11 @@
 		<div class="bridge-header">
 			<div></div>
 			<div class="header-actions">
-				<el-badge :value="pendingCount">
-					<el-button >
-						<el-icon><Refresh /></el-icon>
-					</el-button>
-				</el-badge>
+				<HistoryButton
+						:hasAction="hasAction"
+						@click="handleActionClick"
+						style="margin-left: 20px;"
+				/>
 			</div>
 		</div>
 
@@ -93,20 +93,26 @@
 		<!-- bridge dialogs -->
 		<bridge-dialog-l1 ref="progressDialogL1" @finish="onFinish" />
 		<bridge-dialog-l2 ref="progressDialogL2" @finish="onFinish" />
+
+		<!--	history dialog	-->
+		<HistoryPage v-model="showHistory" />
 	</div>
 </template>
 
 <script setup>
 import { ethers } from "ethers";
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
-import { Refresh, Switch, Loading } from '@element-plus/icons-vue'
+import { Switch, Loading } from '@element-plus/icons-vue'
 import { useStore } from 'vuex';
 import { TOKEN_LIST } from "@/config/tokens.js";
 import { NETWORKS } from "@/config/networks.js";
 import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/services/bridge/balanceService.js";
+import { txList, syncing } from "@/app/store/txStore.js";
 
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
 import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
+import HistoryButton from '@/ui/components/HistoryButton.vue';
+import HistoryPage from '@/ui/views/HistoryPage.vue';
 
 // -----------------------------
 // Vuex & chain IDs
@@ -119,7 +125,8 @@ const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 // -----------------------------
 // Bridge state
 // -----------------------------
-const pendingCount = ref(1);
+const hasAction = ref(false);
+const showHistory = ref(false);
 
 const isL1ToL2 = ref(true); // true: L1->L2, false: L2->L1
 const amount = ref('');
@@ -235,6 +242,10 @@ function handleBridge() {
 		// })
 		progressDialogL2.value?.show(payload);
 	}
+}
+
+function handleActionClick() {
+	showHistory.value = true
 }
 
 function onFinish() {
