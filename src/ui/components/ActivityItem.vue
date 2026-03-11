@@ -21,27 +21,43 @@
 			</div>
 
 			<div class="card-row card-footer">
-				<div class="progress-steps">
-					<div class="step-bar" :class="{ filled: step >= 1, pulse: step === 1 && tx.status !== 'completed' }"></div>
-					<div class="step-bar" :class="{ filled: step >= 2, pulse: step === 2 && tx.status !== 'completed' }"></div>
-					<div class="step-bar" :class="{ filled: step >= 3 }"></div>
+				<!-- progress -->
+				<div v-if="ui?.showSteps" class="progress-steps">
+					<div
+							v-for="(s,i) in ui.steps"
+							:key="i"
+							class="step-bar"
+							:class="{
+								filled:s==='done',
+								pulse:s==='active'
+							}"
+					/>
 				</div>
 
+				<!-- bottom row -->
 				<div class="status-action-row">
+					<!-- status -->
 					<div class="status-chip">
-						<svg v-if="tx.status !== 'completed'" viewBox="0 0 66 66" class="spinner-svg">
-							<circle cx="33" cy="33" r="28" fill="none" stroke="currentColor" opacity="0.2" stroke-width="10"></circle>
+						<svg v-if="ui?.icon === 'spinner'" viewBox="0 0 66 66" class="spinner-svg">
+							<circle cx="33" cy="33" r="28" fill="none" stroke="currentColor" opacity="0.2" stroke-width="10"/>
 							<circle cx="33" cy="33" r="28" fill="none" stroke="currentColor" stroke-dasharray="90, 174" stroke-linecap="round" stroke-width="10" class="spinner-path"></circle>
 						</svg>
-						<span class="status-label">{{ statusInfo.text }}</span>
+						<span v-if="ui?.icon === 'success'">✅</span>
+						<span v-if="ui?.icon === 'error'">❎</span>
+
+						<span class="status-label">{{ ui?.label }}</span>
 					</div>
 
-					<button class="item-btn">
-						<span>Prove</span>
+					<!-- action -->
+					<button v-if="ui?.action" class="item-btn">
+						{{ ui.action.text }}
 						<svg width="12" height="12" viewBox="0 0 14 14" fill="currentColor">
-							<path d="M6.01256 2.03268C6.22362 2.13067 6.40829 2.28142 6.57789 2.4774L9.55528 5.94474C9.85301 6.30278 10 6.65328 10 6.99624C10 7.33921 9.85301 7.70479 9.55528 8.04775L6.57789 11.5151C6.41206 11.7186 6.22362 11.8731 6.01256 11.9711C5.80528 12.0691 5.58668 12.1181 5.35678 12.1181C5.12688 12.1181 4.90829 12.054 4.70101 11.9259C4.48995 11.7978 4.32412 11.6244 4.19221 11.4058C4.06407 11.1872 4 10.9535 4 10.7048C4 10.3317 4.14322 9.9774 4.43342 9.64197L6.73995 6.99624L4.43342 4.36182C4.14322 4.01886 4 3.66082 4 3.2877C4 3.04273 4.06407 2.81283 4.19221 2.598C4.32035 2.37941 4.48995 2.20981 4.701 2.0779C4.90829 1.94976 5.12688 1.88569 5.35678 1.88569C5.58668 1.88569 5.80528 1.93469 6.01256 2.03268Z"></path>
+							<path d="M6.01256 2.03268C6.22362 2.13067 6.40829 2.28142 6.57789 2.4774L9.55528 5.94474C9.85301 6.30278 10 6.65328 10 6.99624C10 7.33921 9.85301 7.70479 9.55528 8.04775L6.57789 11.5151C6.41206 11.7186 6.22362 11.8731 6.01256 11.9711C5.80528 12.0691 5.58668 12.1181 5.35678 12.1181C5.12688 12.1181 4.90829 12.054 4.70101 11.9259C4.48995 11.7978 4.32412 11.6244 4.19221 11.4058C4.06407 11.1872 4 10.9535 4 10.7048C4 10.3317 4.14322 9.9774 4.43342 9.64197L6.73995 6.99624L4.43342 4.36182C4.14322 4.01886 4 3.66082 4 3.2877C4 3.04273 4.06407 2.81283 4.19221 2.598C4.32035 2.37941 4.48995 2.20981 4.701 2.0779C4.90829 1.94976 5.12688 1.88569 5.35678 1.88569C5.58668 1.88569 5.80528 1.93469 6.01256 2.03268Z"/>
 						</svg>
 					</button>
+					<div v-else-if="ui?.countdown" class="countdown-badge">
+						<span>{{formatRemaining(ui.countdown)}}</span>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -49,11 +65,11 @@
 </template>
 
 <script setup>
+import { ethers } from "ethers";
 import { computed } from 'vue';
 import { TOKEN_LIST } from "@/config/tokens.js";
 import ethereumIcon from '@/assets/l1.svg'
 import quarkIcon from '@/assets/quarkchain.svg'
-import {ethers} from "ethers";
 
 const props = defineProps({
 	tx: {
@@ -84,17 +100,8 @@ const tokenInfo = computed(() => {
 const token = computed(() => tokenInfo.value?.token || null)
 const decimals = computed(() => tokenInfo.value?.contract?.decimals || 18)
 
-const statusConfig = {
-	'initiated':        { text: 'Waiting for state', step: 1 },
-	'ready-to-prove':   { text: 'Ready to Prove',    step: 1 },
-	'challenging':      { text: 'Challenge Period',  step: 2 },
-	'ready-to-withdraw':{ text: 'Ready to Withdraw', step: 2 },
-	'completed':        { text: 'Bridge successful', step: 3 },
-	'failed':        		{ text: 'Bridge failed', step: 3 }
-};
+const ui = computed(() => getBridgeUI(props.tx))
 
-const statusInfo = computed(() => statusConfig[props.tx.status] || { text: props.tx.status, step: 0 });
-const step = computed(() => statusInfo.value.step);
 
 const formatTime = (ts) => {
 	if (!ts) return 'Pending';
@@ -122,6 +129,115 @@ const formatAmount = (amt) => {
 	if (!amt || !decimals) return 0;
 	return parseFloat(ethers.formatUnits(amt, decimals.value)).toFixed(2);
 };
+
+function formatRemaining(sec) {
+	if (!sec) return ""
+
+	const days = Math.floor(sec / 86400)
+	if (days > 0) return `~${days} days to go`
+
+	const hours = Math.floor(sec / 3600)
+	if (hours > 0) return `~${hours} hours to go`
+
+	const mins = Math.floor(sec / 60)
+	return `~${mins} min`
+}
+
+function getBridgeUI(tx) {
+	if (!tx) return null
+
+	/*
+	L1 -> L2
+	*/
+	if (tx.direction === "L1→L2") {
+		if (tx.status === "completed") {
+			return {
+				showSteps: false,
+				icon: "success",
+				label: "Bridge successful",
+			}
+		}
+		if (tx.status === "failed") {
+			return {
+				showSteps: false,
+				icon: "error",
+				label: "Bridge failed",
+			}
+		}
+		return {
+			showSteps: true,
+			steps:["done","active"],
+			icon: "spinner",
+			label: "Waiting for confirmation",
+		}
+	}
+
+	/*
+	L2 -> L1
+	*/
+	if (tx.direction === "L2→L1") {
+		if (tx.status === "completed") {
+			return {
+				showSteps: false,
+				icon: "success",
+				label: "Bridge successful",
+			}
+		}
+		if (tx.status === "failed") {
+			return {
+				showSteps: false,
+				icon: "error",
+				label: "Bridge failed",
+			}
+		}
+
+		if (tx.status === "ready-to-prove") {
+			return {
+				showSteps: true,
+				steps: ["done", "active", "pending"],
+				icon: "spinner",
+				label: "Ready to prove",
+				action: {
+					text: "Prove"
+				}
+			}
+		}
+
+		if (tx.status === "challenge-period") {
+			return {
+				showSteps: true,
+				steps: ["done", "done", "active"],
+				icon: "spinner",
+				label: "Challenge period",
+				countdown: tx.remaining
+			}
+		}
+
+		if (tx.status === "ready-to-withdraw") {
+			return {
+				showSteps: true,
+				steps: ["done", "done", "active"],
+				icon: "spinner",
+				label: "Ready to withdraw",
+				action: {
+					text: "Withdraw"
+				}
+			}
+		}
+
+		// if(tx.status === "waiting-prove-window"){
+		return {
+			showSteps: true,
+			steps: ["done", "active", "pending"],
+			icon: "spinner",
+			label: "Waiting for prove window",
+			// countdown: tx.remaining
+			countdown: 28990
+		}
+	}
+
+	return null
+}
 
 const handleCardClick = () => {
 	const isL2ToL1 = props.tx.direction.includes('L2');
@@ -234,15 +350,13 @@ const handleCardClick = () => {
 		height: 6px;
 		flex: 1;
 		border-radius: 999px;
+		background: #f1f5f9;
 	}
 	.step-bar.filled {
 		background: #181ea9;
 	}
-	.step-bar.empty {
-		background: #f1f5f9;
-	}
 	.pulse {
-		animation: pulse-bg 2s infinite;
+		animation: pulse-bg 3s ease-in-out infinite;
 	}
 
 	.status-action-row {
@@ -271,7 +385,7 @@ const handleCardClick = () => {
 			}
 
 			.status-label {
-				font-size: 14px;
+				font-size: 13px;
 				color: #64748b;
 				font-weight: 600;
 			}
@@ -289,14 +403,30 @@ const handleCardClick = () => {
 			font-weight: 500;
 			cursor: pointer;
 		}
+
+		.countdown-badge{
+			display:flex;
+			align-items:center;
+			gap:6px;
+			padding:6px 12px;
+			border-radius:999px;
+			background:#f1f5f9;
+			color:#64748b;
+			font-size:14px;
+			font-weight:500;
+		}
 	}
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
 	}
 	@keyframes pulse-bg {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.5; }
+		0%,100% {
+			background-color: #181ea9;
+		}
+		50% {
+			background-color: #f1f5f9;
+		}
 	}
 }
 </style>
