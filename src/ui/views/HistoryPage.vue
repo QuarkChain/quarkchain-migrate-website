@@ -17,14 +17,8 @@
 			<div class="list-container">
 				<ActivityItem
 						v-for="tx in filteredList"
-						:key="tx.hash"
-						:time-ago="tx.timeAgo"
-						:type="tx.type"
-						:amount="tx.amount"
-						:token-symbol="tx.tokenSymbol"
-						:token-icon="tx.tokenIcon"
-						:from-network-icon="tx.fromNetIcon"
-						:to-network-icon="tx.toNetIcon"
+						:key="`${tx.hash}-${tx.logIndex}`"
+						:tx="tx"
 				/>
 
 				<div v-if="filteredList.length === 0 && !syncing" class="empty">
