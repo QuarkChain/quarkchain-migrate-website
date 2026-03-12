@@ -5,7 +5,7 @@ import { txList, syncing } from "@/app/store/txStore.js";
 import { syncUserTransactions } from "@/services/history/history.js";
 import { loadTransactions } from "@/services/history/db.js";
 
-const POLL_INTERVAL = 30000;
+const POLL_INTERVAL = 180000;
 
 let timer = null;
 let sessionId = 0;
