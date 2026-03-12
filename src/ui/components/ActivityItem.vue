@@ -72,6 +72,7 @@ import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 import ethereumIcon from '@/assets/l1.svg'
 import quarkIcon from '@/assets/quarkchain.svg'
 
+const emit = defineEmits(["open"])
 const props = defineProps({
 	tx: {
 		type: Object,
@@ -240,12 +241,11 @@ function getBridgeUI(tx) {
 }
 
 const handleCardClick = () => {
-	const isL2ToL1 = props.tx.direction.includes('L2');
-	const explorerUrl = isL2ToL1
-			? `https://optimistic.etherscan.io/tx/${props.tx.hash}`
-			: `https://etherscan.io/tx/${props.tx.hash}`;
-
-	window.open(explorerUrl, '_blank');
+	const tx = {
+		...props.tx,
+		tokenObj: tokenInfo.value
+	}
+	emit("open", tx);
 };
 
 </script>

@@ -1,37 +1,56 @@
 <template>
-	<el-dialog
-			:model-value="modelValue"
-			@update:model-value="$emit('update:modelValue', $event)"
-			class="history-dialog"
-			fullscreen >
-		<div class="history-page">
-			<ActivityHeader @filter="isFilterOpen = !isFilterOpen"/>
+	<div>
+		<el-dialog
+				:model-value="modelValue"
+				@update:model-value="$emit('update:modelValue', $event)"
+				class="history-dialog"
+				fullscreen >
+			<div class="history-page">
+				<ActivityHeader @filter="isFilterOpen = !isFilterOpen"/>
 
-			<div v-if="syncing" class="loading-container">
-				<div class="spinner"></div>
-			</div>
+				<div v-if="syncing" class="loading-container">
+					<div class="spinner"></div>
+				</div>
 
-			<div class="list-container">
-				<ActivityItem
-						v-for="tx in filteredList"
-						:key="`${tx.hash}-${tx.logIndex}`"
-						:tx="tx"
-				/>
+				<div class="list-container">
+					<ActivityItem
+							v-for="tx in filteredList"
+							:key="`${tx.hash}-${tx.logIndex}`"
+							:tx="tx"
+							@open="openTx"
+					/>
 
-				<div v-if="filteredList.length === 0 && !syncing" class="empty">
-					<div class="empty-title">No activity yet</div>
-					<div class="empty-desc">Your transactions will appear here</div>
+					<div v-if="filteredList.length === 0 && !syncing" class="empty">
+						<div class="empty-title">No activity yet</div>
+						<div class="empty-desc">Your transactions will appear here</div>
+					</div>
 				</div>
 			</div>
-		</div>
-	</el-dialog>
+		</el-dialog>
+
+		<BridgeDialogL1 ref="dialogL1" @finish="onFinish" />
+		<BridgeDialogL2 ref="dialogL2" @finish="onFinish" />
+	</div>
 </template>
 
 <script setup>
+import { ethers } from "ethers";
+import { useStore } from 'vuex';
 import { ref, computed } from 'vue';
 import { txList, syncing } from "@/app/store/txStore.js";
+import { BRIDGE_DIRECTION } from "@/config/constant.js";
+import { NETWORKS } from "@/config/networks.js";
 import ActivityHeader from '@/ui/components/ActivityHeader.vue';
 import ActivityItem from '@/ui/components/ActivityItem.vue';
+import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
+import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
+
+const store = useStore();
+const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
+const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
+
+const dialogL1 = ref();
+const dialogL2 = ref();
 
 const isFilterOpen = ref(false);
 const currentTag = ref('All');
@@ -42,6 +61,31 @@ const filteredList = computed(() => {
 	}
 	return txList.value.filter(tx => tx.type.includes(currentTag.value));
 });
+
+function openTx(tx) {
+	const params = {
+		mode: 'history',
+		account: tx.address,
+		txHash: tx.hash,
+		status: tx.status,
+		remainingSeconds: tx.remaining,
+	}
+	const {token, contract} = tx.tokenObj;
+	params.token = token;
+	params.amount = parseFloat(ethers.formatUnits(tx.amount, contract.decimals)).toFixed(2);
+	if (tx.direction === BRIDGE_DIRECTION.L1_TO_L2) {
+		params.fromNetwork = NETWORKS[L1ChainId.value];
+		params.toNetwork = NETWORKS[L2ChainId.value];
+		dialogL1.value.show(params)
+	} else {
+		params.fromNetwork = NETWORKS[L2ChainId.value];
+		params.toNetwork = NETWORKS[L1ChainId.value];
+		dialogL2.value.show(params)
+	}
+}
+
+function onFinish() {
+}
 
 defineProps(['modelValue']);
 defineEmits(['update:modelValue']);

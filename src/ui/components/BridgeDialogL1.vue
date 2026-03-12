@@ -8,13 +8,13 @@
 		<div class="dialog-header">
 			<button
 					class="icon-btn"
-					:class="{ invisible: currentPage === 1 }"
+					:class="{ invisible: currentPage === 1 || isHistoryMode }"
 					@click="currentPage = 1"
 			>
 				←
 			</button>
 
-			<div class="step-indicator">
+			<div v-if="!isHistoryMode" class="step-indicator">
 				<div :class="['dot', currentPage === 1 ? 'active' : '']"></div>
 				<div :class="['dot', currentPage === 2 ? 'active' : '']"></div>
 			</div>
@@ -92,7 +92,7 @@
 
 			<div class="steps-container">
 				<!-- STEP 1 -->
-				<div class="step-card">
+				<div v-if="!isHistoryMode" class="step-card">
 					<div class="step-content">
 						<div class="step-left">
 							<img class="step-icon" src="@/assets/l1.svg" alt="l1-network-icon"/>
@@ -227,6 +227,7 @@ import {
 	bridgeToken,
 	waitForL2ERC20Bridge
 } from "@/services/bridge/l1ToL2.js";
+import { BRIDGE_STATUS } from "@/config/constant.js";
 
 const emit = defineEmits(['finish']);
 
@@ -239,6 +240,8 @@ const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 // global state
 const visible = ref(false);
 const currentPage = ref(1)
+const mode = ref('new') // 'new' | 'history'
+const isHistoryMode = computed(() => mode.value === 'history')
 
 // props, page 1
 const DEFAULT_NETWORK = {name: '', icon: '', explorer: '', chainId: ''};
@@ -279,16 +282,28 @@ const gas1ETH = ref('');
 const gas2ETH = ref('');
 const gasLoaded = ref(false);
 let controller = null;
+let historyTxHash = null;
 
 // methods
 function formatAmount(val, unit) {
 	return ethers.parseUnits(val.toString(), unit);
 }
 
-function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc}) {
+function show({
+	fromNetwork: fn,
+	toNetwork: tn,
+	token: tk,
+	amount: am,
+	account: acc,
+	mode: md,
+	txHash,
+	status
+}) {
 	// reset
 	currentPage.value= 1;
 	Object.assign(steps, createInitialSteps());
+	mode.value = md || 'new';
+	historyTxHash = txHash || null;
 
 	// props
 	fromNetwork.value = fn;
@@ -303,7 +318,30 @@ function show({fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: a
 
 	// status
 	visible.value = true;
-	loadData();
+	if (isHistoryMode.value) {
+		// history mode: no approval/start actions; show progress/result only
+		currentPage.value = 2;
+		steps[1] = STATUS.SUCCESS; // hidden anyway
+		steps[2] = STATUS.SUCCESS; // deposit already executed
+		const normalizedStatus = String(status || '');
+		if (normalizedStatus === BRIDGE_STATUS.COMPLETED) {
+			steps[3] = STATUS.SUCCESS;
+			steps[4] = STATUS.SUCCESS;
+			return;
+		}
+		if (normalizedStatus === BRIDGE_STATUS.FAILED) {
+			steps[3] = STATUS.SUCCESS;
+			steps[4] = STATUS.FAILED;
+			return;
+		}
+
+		steps[3] = STATUS.IDLE;
+		if (historyTxHash) {
+			l2Mint(historyTxHash);
+		}
+	} else {
+		loadData();
+	}
 }
 
 async function loadData() {
@@ -429,12 +467,13 @@ watch(visible, (val) => {
 	}
 
 	if (val) {
-		if (gasTimer) clearInterval(gasTimer);
-
-		loadGasCost();
-		gasTimer = setInterval(loadGasCost, 30000);
+		if (!isHistoryMode.value) {
+			if (gasTimer) clearInterval(gasTimer);
+			loadGasCost();
+			gasTimer = setInterval(loadGasCost, 30000);
+		}
 	} else {
-		clearInterval(gasTimer);
+		if (gasTimer) clearInterval(gasTimer);
 	}
 });
 

@@ -7,9 +7,8 @@
 	>
 		<div class="dialog-header">
 			<button
-					v-if="!isHistoryMode"
 					class="icon-btn"
-					:class="{ invisible: currentPage === 1 }"
+					:class="{ invisible: currentPage === 1 || isHistoryMode }"
 					@click="goPrevPage"
 			>
 				←
@@ -338,6 +337,7 @@ import { useStore } from "vuex";
 import { Wallet, InfoFilled, Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
+import { BRIDGE_STATUS } from "@/config/constant.js";
 import {
 	getL1GasPrice,
 	getL2GasPrice,
@@ -364,7 +364,8 @@ const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 const visible = ref(false);
 const currentPage = ref(1);
 const txHash = ref(null);
-const isHistoryMode = computed(() => !!txHash.value);
+const mode = ref('new') // 'new' | 'history'
+const isHistoryMode = computed(() => mode.value === 'history');
 
 // ----------------------------
 // Page 1 (review) state
@@ -468,9 +469,20 @@ const formattedFinalizeCountdown = computed(() => formatRemainingTime(finalizeRe
 
 // ----------------------------
 // Public API-------
-async function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, account: acc, txHash: incomingTxHash, historyStatus }) {
+async function show({
+	fromNetwork: fn,
+	toNetwork: tn,
+	token: tk,
+	amount: am,
+	account: acc,
+	mode: incomingMode,
+	txHash: incomingTxHash,
+	status,
+	remainingSeconds
+}) {
 	// reset (dialog + pages)
-	currentPage.value = incomingTxHash ? 4 : 1;
+	mode.value = incomingMode || (incomingTxHash ? 'history' : 'new');
+	currentPage.value = isHistoryMode.value ? 4 : 1;
 	checkedStates.value = [false, false, false];
 	checked.value = false;
 	Object.assign(steps, createInitialSteps());
@@ -494,58 +506,63 @@ async function show({ fromNetwork: fn, toNetwork: tn, token: tk, amount: am, acc
 	visible.value = true;
 
 	loadGasCost();
-	if (incomingTxHash) {
-		if (historyStatus) {
-			initFromHistory(historyStatus);
-		} else {
-			console.warn('historyStatus is required when txHash is provided');
-		}
+	if (isHistoryMode.value && txHash.value) {
+		// history mode: render step page only; derive progress from status
+		const normalized = String(status || '');
+		const remain = Number.isFinite(Number(remainingSeconds)) ? Number(remainingSeconds) : undefined;
+		initFromHistoryStatus(normalized, remain);
 	}
 }
 
 // ----------------------------
 // Methods
 // ----------------------------
-function initFromHistory(status) {
-	// status：{ stage: 'wait_prove' | 'prove_ready' | 'wait_finalize' | 'finalize_ready' | 'completed', remainingSeconds?: number }
-	steps[1] = STATUS.SUCCESS;
+function initFromHistoryStatus(normalizedStatus, remaining) {
+	// L2 -> L1 history mapping based on BRIDGE_STATUS
+	steps[1] = STATUS.SUCCESS; // withdraw already happened (txHash exists)
 
-	switch (status.stage) {
-		case 'wait_prove':
-			steps[2] = STATUS.LOADING;
-			if (status.remainingSeconds !== undefined) {
-				proveRemainingSeconds.value = status.remainingSeconds;
-			}
-			startProvePolling(txHash.value);
-			break;
-		case 'prove_ready':
-			steps[2] = STATUS.SUCCESS;
-			steps[3] = STATUS.IDLE;
-			break;
-		case 'wait_finalize':
-			steps[2] = STATUS.SUCCESS;
-			steps[3] = STATUS.SUCCESS;
-			steps[4] = STATUS.LOADING;
-			if (status.remainingSeconds !== undefined) {
-				finalizeRemainingSeconds.value = status.remainingSeconds;
-			}
-			startFinalizePolling(txHash.value);
-			break;
-		case 'finalize_ready':
-			steps[2] = STATUS.SUCCESS;
-			steps[3] = STATUS.SUCCESS;
-			steps[4] = STATUS.SUCCESS;
-			steps[5] = STATUS.IDLE;
-			break;
-		case 'completed':
-			steps[2] = STATUS.SUCCESS;
-			steps[3] = STATUS.SUCCESS;
-			steps[4] = STATUS.SUCCESS;
-			steps[5] = STATUS.SUCCESS;
-			break;
-		default:
-			console.warn('Unknown history stage:', status.stage);
+	if (normalizedStatus === BRIDGE_STATUS.COMPLETED) {
+		steps[2] = STATUS.SUCCESS;
+		steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.SUCCESS;
+		steps[5] = STATUS.SUCCESS;
+		return;
 	}
+	if (normalizedStatus === BRIDGE_STATUS.FAILED) {
+		steps[2] = STATUS.SUCCESS;
+		steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.SUCCESS;
+		steps[5] = STATUS.FAILED;
+		return;
+	}
+
+	if (normalizedStatus === BRIDGE_STATUS.READY_TO_WITHDRAW) {
+		steps[2] = STATUS.SUCCESS;
+		steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.SUCCESS;
+		steps[5] = STATUS.IDLE;
+		return;
+	}
+
+	if (normalizedStatus === BRIDGE_STATUS.CHALLENGE_PERIOD) {
+		steps[2] = STATUS.SUCCESS;
+		steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.LOADING;
+		if (remaining !== undefined) finalizeRemainingSeconds.value = remaining;
+		startFinalizePolling(txHash.value);
+		return;
+	}
+
+	if (normalizedStatus === BRIDGE_STATUS.READY_TO_PROVE) {
+		steps[2] = STATUS.SUCCESS;
+		steps[3] = STATUS.IDLE;
+		return;
+	}
+
+	// waiting-prove-window / unknown => poll prove availability
+	steps[2] = STATUS.LOADING;
+	if (remaining !== undefined) proveRemainingSeconds.value = remaining;
+	startProvePolling(txHash.value);
 }
 
 function goPrevPage() {
@@ -733,15 +750,17 @@ async function btnFinalize() {
 let gasTimer;
 watch(visible, (val) => {
 	if (val) {
+		if (steps[5] === STATUS.SUCCESS) {
+			return;
+		}
 		if (gasTimer) clearInterval(gasTimer);
 		loadGasCost();
 		gasTimer = setInterval(loadGasCost, 30000);
 	} else {
-		clearInterval(gasTimer);
-		[provePollTimer, finalizePollTimer, countdownTimerProve, countdownTimerFinalize].forEach(timer => {
+		[gasTimer, provePollTimer, finalizePollTimer, countdownTimerProve, countdownTimerFinalize].forEach(timer => {
 			if (timer) clearInterval(timer);
 		});
-		provePollTimer = finalizePollTimer = countdownTimerProve = countdownTimerFinalize = null;
+		gasTimer = provePollTimer = finalizePollTimer = countdownTimerProve = countdownTimerFinalize = null;
 		proveRemainingSeconds.value = 0;
 		finalizeRemainingSeconds.value = 0;
 	}
