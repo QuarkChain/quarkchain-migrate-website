@@ -9,9 +9,6 @@
 
 			<div v-if="syncing" class="loading-container">
 				<div class="spinner"></div>
-				<div class="loading-text">
-					Fetching transactions...
-				</div>
 			</div>
 
 			<div class="list-container">
@@ -61,8 +58,7 @@ defineEmits(['update:modelValue']);
 	display:flex;
 	flex-direction:column;
 	align-items:center;
-	padding:50px 0 30px;
-	gap:12px;
+	padding: 20px 0 0;
 
 	.spinner{
 		width:28px;
@@ -71,12 +67,6 @@ defineEmits(['update:modelValue']);
 		border-top-color:#4f46e5;
 		border-radius:50%;
 		animation:spin .8s linear infinite;
-	}
-
-	.loading-text{
-		font-size:13px;
-		color:#64748b;
-		font-weight: 500;
 	}
 }
 @keyframes spin{

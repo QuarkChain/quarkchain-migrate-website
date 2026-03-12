@@ -2,6 +2,7 @@ import pLimit from 'p-limit';
 import { ethers } from "ethers";
 import { loadProgress, saveTransactions, updateProgress } from "./db.js";
 import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
+import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 
 const L1_BRIDGE_DEPLOY_BLOCK = {
 	'0x1': 23874421,      // Ethereum mainnet
@@ -67,7 +68,7 @@ export async function parseLogs(logs, provider, direction, address) {
 			amount: parsed.args.amount.toString(),
 			timestamp: timestamp,
 			blockNumber: log.blockNumber,
-			status: "initiated"
+			status: BRIDGE_STATUS.UNKNOWN
 		});
 	}
 	return txs;
@@ -107,7 +108,7 @@ async function syncL1(chainId, bridgeAddress, address, opts = {}) {
 		const txs = await parseLogs(
 				logs,
 				provider,
-				"L1→L2",
+				BRIDGE_DIRECTION.L1_TO_L2,
 				address
 		);
 
@@ -143,7 +144,7 @@ async function syncL2(chainId, bridgeAddress, address, opts = {}) {
 		const txs = await parseLogs(
 				logs,
 				provider,
-				"L2→L1",
+				BRIDGE_DIRECTION.L2_TO_L1,
 				address
 		);
 

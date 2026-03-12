@@ -42,8 +42,8 @@
 							<circle cx="33" cy="33" r="28" fill="none" stroke="currentColor" opacity="0.2" stroke-width="10"/>
 							<circle cx="33" cy="33" r="28" fill="none" stroke="currentColor" stroke-dasharray="90, 174" stroke-linecap="round" stroke-width="10" class="spinner-path"></circle>
 						</svg>
-						<span v-if="ui?.icon === 'success'">✅</span>
-						<span v-if="ui?.icon === 'error'">❎</span>
+						<span v-if="ui?.icon === 'success'" class="status-success">✓</span>
+						<span v-if="ui?.icon === 'error'" class="status-failed">x</span>
 
 						<span class="status-label">{{ ui?.label }}</span>
 					</div>
@@ -68,6 +68,7 @@
 import { ethers } from "ethers";
 import { computed } from 'vue';
 import { TOKEN_LIST } from "@/config/tokens.js";
+import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 import ethereumIcon from '@/assets/l1.svg'
 import quarkIcon from '@/assets/quarkchain.svg'
 
@@ -149,15 +150,15 @@ function getBridgeUI(tx) {
 	/*
 	L1 -> L2
 	*/
-	if (tx.direction === "L1→L2") {
-		if (tx.status === "completed") {
+	if (tx.direction === BRIDGE_DIRECTION.L1_TO_L2) {
+		if (tx.status === BRIDGE_STATUS.COMPLETED) {
 			return {
 				showSteps: false,
 				icon: "success",
 				label: "Bridge successful",
 			}
 		}
-		if (tx.status === "failed") {
+		if (tx.status === BRIDGE_STATUS.FAILED) {
 			return {
 				showSteps: false,
 				icon: "error",
@@ -175,15 +176,15 @@ function getBridgeUI(tx) {
 	/*
 	L2 -> L1
 	*/
-	if (tx.direction === "L2→L1") {
-		if (tx.status === "completed") {
+	if (tx.direction === BRIDGE_DIRECTION.L2_TO_L1) {
+		if (tx.status === BRIDGE_STATUS.COMPLETED) {
 			return {
 				showSteps: false,
 				icon: "success",
 				label: "Bridge successful",
 			}
 		}
-		if (tx.status === "failed") {
+		if (tx.status === BRIDGE_STATUS.FAILED) {
 			return {
 				showSteps: false,
 				icon: "error",
@@ -191,7 +192,7 @@ function getBridgeUI(tx) {
 			}
 		}
 
-		if (tx.status === "ready-to-prove") {
+		if (tx.status === BRIDGE_STATUS.READY_TO_PROVE) {
 			return {
 				showSteps: true,
 				steps: ["done", "active", "pending"],
@@ -203,7 +204,7 @@ function getBridgeUI(tx) {
 			}
 		}
 
-		if (tx.status === "challenge-period") {
+		if (tx.status === BRIDGE_STATUS.CHALLENGE_PERIOD) {
 			return {
 				showSteps: true,
 				steps: ["done", "done", "active"],
@@ -213,7 +214,7 @@ function getBridgeUI(tx) {
 			}
 		}
 
-		if (tx.status === "ready-to-withdraw") {
+		if (tx.status === BRIDGE_STATUS.READY_TO_WITHDRAW) {
 			return {
 				showSteps: true,
 				steps: ["done", "done", "active"],
@@ -231,8 +232,7 @@ function getBridgeUI(tx) {
 			steps: ["done", "active", "pending"],
 			icon: "spinner",
 			label: "Waiting for prove window",
-			// countdown: tx.remaining
-			countdown: 28990
+			countdown: tx.remaining
 		}
 	}
 
@@ -382,6 +382,31 @@ const handleCardClick = () => {
 					animation: spin 2s linear infinite;
 					transform-origin: center;
 				}
+			}
+
+			.status-success {
+				width: 18px;
+				height: 18px;
+				border-radius: 50%;
+				background: rgb(24, 30, 169);
+				color: white;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-weight: bold;
+				animation: fadeIn 0.3s ease-out;
+			}
+			.status-failed {
+				width: 18px;
+				height: 18px;
+				border-radius: 50%;
+				background: #e53935;
+				color: white;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-weight: bold;
+				animation: fadeIn 0.3s ease-out;
 			}
 
 			.status-label {
