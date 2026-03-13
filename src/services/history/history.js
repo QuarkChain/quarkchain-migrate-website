@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import { loadProgress, saveTransactions, updateProgress } from "./db.js";
 import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
+import { syncPendingStatus } from "@/services/history/bridgeStatus.js";
 
 const BRIDGE_DEPLOY_BLOCK = {
 	'0x1': 23874421,      // Ethereum mainnet
@@ -61,17 +62,19 @@ async function parseLogs(logs, provider, direction, address) {
 		const timestamp = blockCache.get(log.blockNumber);
 		const parsed = iface.parseLog(log);
 		txs.push({
-			id: `${log.transactionHash}-${parseInt(log.logIndex, 16)}`,
+			id: log.transactionHash,
 			address,
 			direction,
 			hash: log.transactionHash,
+			msgHash: null,
 			token: parsed.args.localToken,
 			from: parsed.args.from,
 			to: parsed.args.to,
 			amount: parsed.args.amount.toString(),
 			timestamp: timestamp,
 			blockNumber: log.blockNumber,
-			status: BRIDGE_STATUS.UNKNOWN
+			status: BRIDGE_STATUS.UNKNOWN,
+			remaining: 0
 		});
 	}
 	return txs;
@@ -131,10 +134,11 @@ async function fetchLogsWithAPI(apiUrl, chainId, account, direction, { address, 
 				topics: log.topics
 			});
 			return {
-				id: `${log.transactionHash}-${parseInt(log.logIndex, 16)}`,
+				id: log.transactionHash,
 				address: account,
 				direction: direction,
 				hash: log.transactionHash,
+				msgHash: null,
 
 				token: parsed.args.localToken,
 				from: parsed.args.from,
@@ -142,7 +146,8 @@ async function fetchLogsWithAPI(apiUrl, chainId, account, direction, { address, 
 				amount: parsed.args.amount.toString(),
 				timestamp: parseInt(log.timeStamp, 16),
 				blockNumber: parseInt(log.blockNumber, 16),
-				status: BRIDGE_STATUS.UNKNOWN
+				status: BRIDGE_STATUS.UNKNOWN,
+				remaining: 0
 			};
 		} catch (e) {
 			return null;
@@ -182,7 +187,8 @@ async function syncLayer(layer, chainId, bridgeAddress, userAddress, opts = {}) 
 	const provider = isL1 ? getL1Provider(chainId) : getL2Provider(chainId);
 
 	const deployBlock = BRIDGE_DEPLOY_BLOCK[chainId];
-	const latest = await provider.getBlockNumber();
+	let latest = await provider.getBlockNumber();
+	latest = latest - (isL1 ? 1 : 6);
 	let from = Math.max(progress.lastBlock + 1, deployBlock);
 	if (latest <= from) return;
 
@@ -248,4 +254,5 @@ export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, address
 		syncLayer("L1", l1ChainId, bridge.L1StandardBridge, address, opts),
 		syncLayer("L2", l2ChainId, bridge.L2StandardBridge, address, opts)
 	]);
+	await syncPendingStatus(l1ChainId, l2ChainId, bridge, address, opts);
 }

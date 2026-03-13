@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 import { getL1Provider, getL2Provider, getSigner } from "@/infra/provider/providerManager.js";
 import { approve, getAllowance } from "@/infra/erc20/erc20.js";
 import { L1_BRIDGE_ABI, L1_MESSENGER_ABI, L2_MESSENGER_ABI } from "@/config/abi.js";
+import { BRIDGE_STATUS } from "@/config/constant.js";
 
 export async function getGasPrice(L1ChainId) {
 	const provider = getL1Provider(L1ChainId);
@@ -39,39 +40,38 @@ export async function bridgeToken(L1ChainId, bridgeAddress, l1Token, l2TokenAddr
 	return await tx.wait();
 }
 
-export async function waitForL2ERC20Bridge(L1ChainId, L2ChainId, Bridge, l1TxHash, signal) {
-	const { L1CrossDomainMessengerProxy, L2CrossDomainMessenger } = Bridge;
-	const l1Provider = getL1Provider(L1ChainId);
+export async function getL1ToL2MessageHash(l1Provider, l1TxHash, messengerAddress) {
 	const receipt = await l1Provider.getTransactionReceipt(l1TxHash);
-	if (!receipt) throw new Error("L1 Transaction not found");
-
+	if (!receipt) return null;
 
 	const l1MessengerIface = new ethers.Interface(L1_MESSENGER_ABI);
-	let msgHash = null;
 	for (const log of receipt.logs) {
-		if (log.address.toLowerCase() !== L1CrossDomainMessengerProxy.toLowerCase()) continue;
+		if (log.address.toLowerCase() !== messengerAddress.toLowerCase()) continue;
 
 		try {
 			const parsed = l1MessengerIface.parseLog(log);
-			const { target, sender, message, messageNonce, gasLimit } = parsed.args;
-			const iface = new ethers.Interface([
-				"function relayMessage(uint256,address,address,uint256,uint256,bytes)"
-			]);
-			const encoded = iface.encodeFunctionData("relayMessage", [
-				messageNonce,
-				sender,
-				target,
-				0n,
-				gasLimit,
-				message
-			]);
-			msgHash = ethers.keccak256(encoded);
-			break;
+			if (parsed.name === "SentMessage") {
+				const { target, sender, message, messageNonce, gasLimit } = parsed.args;
+				const iface = new ethers.Interface([
+					"function relayMessage(uint256,address,address,uint256,uint256,bytes)"
+				]);
+				const encoded = iface.encodeFunctionData("relayMessage", [
+					messageNonce, sender, target, 0n, gasLimit, message
+				]);
+				return ethers.keccak256(encoded);
+			}
 		} catch (e) {
 		}
 	}
-	if (!msgHash) throw new Error("SentMessage event not found in L1 receipt");
+	return null;
+}
 
+export async function waitForL2ERC20Bridge(L1ChainId, L2ChainId, Bridge, l1TxHash, signal) {
+	const { L1CrossDomainMessengerProxy, L2CrossDomainMessenger } = Bridge;
+	const l1Provider = getL1Provider(L1ChainId);
+
+	const msgHash = await getL1ToL2MessageHash(l1Provider, l1TxHash, L1CrossDomainMessengerProxy);
+	if (!msgHash) throw new Error("SentMessage event not found in L1 receipt");
 
 	const l2Provider = getL2Provider(L2ChainId);
 	const l2Messenger = new ethers.Contract(L2CrossDomainMessenger, L2_MESSENGER_ABI, l2Provider);
@@ -93,4 +93,17 @@ export async function waitForL2ERC20Bridge(L1ChainId, L2ChainId, Bridge, l1TxHas
 
 		await new Promise(r => setTimeout(r, 5000));
 	}
+}
+
+export async function checkL1ToL2Status(l2Provider, L2CrossDomainMessenger, msgHash) {
+	if (!msgHash) return { status: BRIDGE_STATUS.UNKNOWN };
+
+	const l2Messenger = new ethers.Contract(L2CrossDomainMessenger, L2_MESSENGER_ABI, l2Provider);
+	const [isSuccessful, isFailed] = await Promise.all([
+		l2Messenger.successfulMessages(msgHash),
+		l2Messenger.failedMessages(msgHash)
+	]);
+
+	if (isSuccessful) return BRIDGE_STATUS.COMPLETED;
+	if (isFailed) return BRIDGE_STATUS.FAILED;
 }

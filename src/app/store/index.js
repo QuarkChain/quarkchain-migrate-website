@@ -4,7 +4,7 @@ import { CONTRACTS } from "@/config/contracts.js";
 
 export default createStore({
   state() {
-    const activeEnvId = import.meta.env.TARGET_L1_CHAIN_ID || '0xaa36a7'
+    const activeEnvId = import.meta.env.VITE_TARGET_L1_CHAIN_ID || '0xaa36a7'
     const l1ChainId = activeEnvId
     const l2ChainId = activeEnvId === '0x1' ? '0x186ab' : '0x1adbb'
 

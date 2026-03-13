@@ -228,6 +228,7 @@ import {
 	waitForL2ERC20Bridge
 } from "@/services/bridge/l1ToL2.js";
 import { BRIDGE_STATUS } from "@/config/constant.js";
+import { saveTransactions } from "@/services/history/db.js";
 
 const emit = defineEmits(['finish']);
 
@@ -393,6 +394,9 @@ async function runStep1() {
 			steps[1] = STATUS.SUCCESS;
 			steps[2] = STATUS.IDLE;
 			ElMessage.success("Approved successfully.");
+
+			// TODO insert db
+			// saveTransactions();
 		} else {
 			steps[1] = STATUS.IDLE;
 			ElMessage.error("Approved amount < migration amount.");
@@ -447,6 +451,8 @@ async function l2Mint(txHash) {
 			steps[4] = STATUS.FAILED;
 			ElMessage.error("Bridge execution failed on L2.");
 		}
+
+		//  TODO  update
 	} catch (e) {
 		if (e?.name === 'AbortError' || controller?.signal?.aborted) {
 			return;

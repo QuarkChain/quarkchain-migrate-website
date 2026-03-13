@@ -37,7 +37,7 @@ export async function bridgeTokenToL1(L2ChainId, bridgeAddress, l2Token, to, amo
 
 
 // l2 send
-async function extractWithdrawal(l2TxHash, l2ChainId) {
+export async function extractWithdrawal(l2TxHash, l2ChainId) {
 	const pL2 = getPublicClientL2(l2ChainId);
 	const receipt = await pL2.getTransactionReceipt({ hash: l2TxHash });
 	const [withdrawal] = getWithdrawals(receipt);
@@ -99,4 +99,14 @@ export async function finalizeWithdrawal(l2TxHash, l1ChainId, l2ChainId) {
 		targetChain: pL2.chain,
 	});
 	return await pL1.waitForTransactionReceipt({ hash });
+}
+
+export async function checkIsWithdrawalFinalized(l1ChainId, optimismPortalAddress, withdrawalHash) {
+	const provider = getL1Provider(l1ChainId);
+	const portal = new ethers.Contract(
+			optimismPortalAddress,
+			["function finalizedWithdrawals(bytes32) view returns (bool)"],
+			provider
+	);
+	return await portal.finalizedWithdrawals(withdrawalHash);
 }

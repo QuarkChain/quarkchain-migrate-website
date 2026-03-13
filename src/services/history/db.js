@@ -1,4 +1,5 @@
 import { openDB } from "idb";
+import { BRIDGE_STATUS } from "@/config/constant.js";
 
 const DB_NAME = "BridgeHistoryDB";
 const TX_STORE = "transactions";
@@ -24,13 +25,22 @@ function getDB() {
 	return dbPromise;
 }
 
-export async function saveTransactions(txs) {
-	if (!txs.length) return;
+export async function saveTransactions(data) {
+	const items = Array.isArray(data) ? data : [data];
+	if (!items.length) return;
 
 	const db = await getDB();
 	const tx = db.transaction(TX_STORE, "readwrite");
-	for (const item of txs) {
-		tx.store.put(item);
+	const store = tx.store;
+	for (const newItem of items) {
+		if (!newItem.id) continue;
+
+		const existing = await store.get(newItem.id);
+		if (existing) {
+			await store.put({ ...existing, ...newItem });
+		} else {
+			await store.put(newItem);
+		}
 	}
 	await tx.done;
 }
@@ -44,6 +54,14 @@ export async function loadTransactions(address) {
 
 	const txs = await index.getAll(address);
 	return txs.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+export async function loadPendingTransactions(address) {
+	const db = await getDB();
+	const txs = await db.getAllFromIndex(TX_STORE, "address", address);
+
+	const FINAL_STATUS = [BRIDGE_STATUS.COMPLETED, BRIDGE_STATUS.FAILED];
+	return txs.filter(tx => !FINAL_STATUS.includes(tx.status));
 }
 
 export async function loadProgress(address, layer) {
