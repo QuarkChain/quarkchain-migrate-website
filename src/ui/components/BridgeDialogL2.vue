@@ -332,20 +332,23 @@
 
 <script setup>
 import { ethers } from 'ethers';
-import { computed, watch, ref, reactive, onUnmounted } from 'vue';
-import { useStore } from "vuex";
-import { Wallet, InfoFilled, Timer, Coin } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus';
+import { computed, onUnmounted, reactive, ref, watch } from 'vue';
+import { useStore} from "vuex";
+import { Coin, InfoFilled, Timer, Wallet } from '@element-plus/icons-vue'
+import { ElMessage} from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
+import { usePolling } from "@/ui/composables/usePolling.js";
 import { BRIDGE_STATUS } from "@/config/constant.js";
 import {
+	bridgeTokenToL1,
+	checkFinalizeStatus,
+	checkIsWithdrawalFinalized,
+	checkProveStatus,
+	extractWithdrawal,
+	finalizeWithdrawal,
 	getL1GasPrice,
 	getL2GasPrice,
-	bridgeTokenToL1,
-	checkProveStatus,
-	proveWithdrawal,
-	checkFinalizeStatus,
-	finalizeWithdrawal
+	proveWithdrawal
 } from "@/services/bridge/l2ToL1.js";
 
 const emit = defineEmits(['finish']);
@@ -354,6 +357,7 @@ const emit = defineEmits(['finish']);
 // Store deps
 // ----------------------------
 const store = useStore();
+const Bridge = computed(() => store.getters.Bridge);
 const L2StandardBridge = computed(() => store.getters.L2StandardBridge);
 const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
 const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
@@ -443,6 +447,9 @@ let finalizePollTimer = null;
 let countdownTimerProve = null;
 let countdownTimerFinalize = null;
 
+const gasPollingEnabled = computed(() => visible.value && steps[5] !== STATUS.SUCCESS);
+usePolling(loadGasCost, 30000, gasPollingEnabled);
+
 // ----------------------------
 // Utils
 // ----------------------------
@@ -480,6 +487,9 @@ async function show({
 	status,
 	remainingSeconds
 }) {
+	// if dialog already open, prevent timer stacking when switching txs
+	stopAllTimers();
+
 	// reset (dialog + pages)
 	mode.value = incomingMode || (incomingTxHash ? 'history' : 'new');
 	currentPage.value = isHistoryMode.value ? 4 : 1;
@@ -508,16 +518,43 @@ async function show({
 	loadGasCost();
 	if (isHistoryMode.value && txHash.value) {
 		// history mode: render step page only; derive progress from status
+		// but status in db syncs every ~3 minutes, so we must check finalized state first
 		const normalized = String(status || '');
 		const remain = Number.isFinite(Number(remainingSeconds)) ? Number(remainingSeconds) : undefined;
-		initFromHistoryStatus(normalized, remain);
+		await initFromHistoryStatus(normalized, remain);
 	}
 }
 
 // ----------------------------
 // Methods
 // ----------------------------
-function initFromHistoryStatus(normalizedStatus, remaining) {
+function stopAllTimers() {
+	const timers = [
+		provePollTimer,
+		finalizePollTimer,
+		countdownTimerProve,
+		countdownTimerFinalize
+	];
+	timers.forEach(timer => {
+		if (timer) clearInterval(timer);
+	});
+	provePollTimer = finalizePollTimer = countdownTimerProve = countdownTimerFinalize = null;
+}
+
+async function tryResolveFinalizedFromChain(hash) {
+	try {
+		const optimismPortal = Bridge.value?.L1OptimismPortalProxy;
+		if (!optimismPortal) return false;
+
+		const { withdrawal } = await extractWithdrawal(hash, L2ChainId.value);
+		return await checkIsWithdrawalFinalized(L1ChainId.value, optimismPortal, withdrawal.withdrawalHash);
+	} catch (e) {
+		console.warn("Finalized check failed (history mode)", e);
+		return false;
+	}
+}
+
+async function initFromHistoryStatus(normalizedStatus, remaining) {
 	// L2 -> L1 history mapping based on BRIDGE_STATUS
 	steps[1] = STATUS.SUCCESS; // withdraw already happened (txHash exists)
 
@@ -533,6 +570,16 @@ function initFromHistoryStatus(normalizedStatus, remaining) {
 		steps[3] = STATUS.SUCCESS;
 		steps[4] = STATUS.SUCCESS;
 		steps[5] = STATUS.FAILED;
+		return;
+	}
+	const finalized = await tryResolveFinalizedFromChain(txHash.value);
+	if (finalized) {
+		steps[2] = STATUS.SUCCESS;
+		steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.SUCCESS;
+		steps[5] = STATUS.SUCCESS;
+
+		stopAllTimers();
 		return;
 	}
 
@@ -575,7 +622,6 @@ function goPrevPage() {
 async function loadGasCost() {
 	// all is finish
 	if(steps[5] === STATUS.SUCCESS) {
-		if (gasTimer) clearInterval(gasTimer);
 		return;
 	}
 	gasLoaded.value = false;
@@ -640,14 +686,22 @@ async function btnWithdraw() {
 }
 
 async function startProvePolling(hash) {
+	// avoid stacking intervals if called multiple times
+	if (provePollTimer) clearInterval(provePollTimer);
+	if (countdownTimerProve) clearInterval(countdownTimerProve);
+	provePollTimer = null;
+	countdownTimerProve = null;
+
 	const poll = async () => {
 		try {
 			const result = await checkProveStatus(hash, L1ChainId.value, L2ChainId.value);
 			if (result.canProve) {
 				steps[2] = STATUS.SUCCESS;
 				steps[3] = STATUS.IDLE;
-				clearInterval(provePollTimer);
-				clearInterval(countdownTimerProve);
+				if (provePollTimer) clearInterval(provePollTimer);
+				if (countdownTimerProve) clearInterval(countdownTimerProve);
+				provePollTimer = null;
+				countdownTimerProve = null;
 				proveRemainingSeconds.value = 0;
 			} else {
 				proveRemainingSeconds.value = result.seconds;
@@ -694,14 +748,22 @@ async function btnProve() {
 }
 
 async function startFinalizePolling(hash) {
+	// avoid stacking intervals if called multiple times
+	if (finalizePollTimer) clearInterval(finalizePollTimer);
+	if (countdownTimerFinalize) clearInterval(countdownTimerFinalize);
+	finalizePollTimer = null;
+	countdownTimerFinalize = null;
+
 	const poll = async () => {
 		try {
 			const result = await checkFinalizeStatus(hash, L1ChainId.value, L2ChainId.value);
 			if (result.canFinalize) {
 				steps[4] = STATUS.SUCCESS;
 				steps[5] = STATUS.IDLE;
-				clearInterval(finalizePollTimer);
-				clearInterval(countdownTimerFinalize);
+				if (finalizePollTimer) clearInterval(finalizePollTimer);
+				if (countdownTimerFinalize) clearInterval(countdownTimerFinalize);
+				finalizePollTimer = null;
+				countdownTimerFinalize = null;
 				finalizeRemainingSeconds.value = 0;
 			} else {
 				finalizeRemainingSeconds.value = result.seconds;
@@ -747,30 +809,16 @@ async function btnFinalize() {
 }
 
 // clear
-let gasTimer;
 watch(visible, (val) => {
-	if (val) {
-		if (steps[5] === STATUS.SUCCESS) {
-			return;
-		}
-		if (gasTimer) clearInterval(gasTimer);
-		loadGasCost();
-		gasTimer = setInterval(loadGasCost, 30000);
-	} else {
-		[gasTimer, provePollTimer, finalizePollTimer, countdownTimerProve, countdownTimerFinalize].forEach(timer => {
-			if (timer) clearInterval(timer);
-		});
-		gasTimer = provePollTimer = finalizePollTimer = countdownTimerProve = countdownTimerFinalize = null;
+	if (!val) {
+		stopAllTimers();
 		proveRemainingSeconds.value = 0;
 		finalizeRemainingSeconds.value = 0;
 	}
 });
 
 onUnmounted(() => {
-	[provePollTimer, finalizePollTimer, countdownTimerProve, countdownTimerFinalize].forEach(timer => {
-		if (timer) clearInterval(timer);
-	});
-	if (gasTimer) clearInterval(gasTimer);
+	stopAllTimers();
 });
 
 defineExpose({ show });

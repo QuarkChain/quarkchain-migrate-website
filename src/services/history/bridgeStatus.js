@@ -9,7 +9,16 @@ import {
 	extractWithdrawal
 } from "@/services/bridge/l2ToL1.js";
 
-async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx) {
+function throwIfAborted(signal) {
+	if (signal?.aborted) {
+		const err = new Error("Sync aborted");
+		err.name = "AbortError";
+		throw err;
+	}
+}
+
+async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal) {
+	throwIfAborted(signal);
 	if (tx.direction === BRIDGE_DIRECTION.L1_TO_L2) {
 		// l1 to l2
 		// 1. get msgHash
@@ -78,13 +87,14 @@ async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx) {
 }
 
 export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, address, opts = {}) {
+	const { signal } = opts;
 	const pendings = await loadPendingTransactions(address);
 	if (pendings.length === 0) return;
 
 	const updates = [];
 	for (const tx of pendings) {
 		try {
-			const latest = await getLatestStatus(l1ChainId, l2ChainId, bridge, tx);
+			const latest = await getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal);
 			updates.push({
 				id: tx.id,
 				status: latest.status,

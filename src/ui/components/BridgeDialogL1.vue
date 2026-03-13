@@ -220,6 +220,7 @@ import { useStore } from "vuex";
 import { Timer, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
+import { usePolling } from "@/ui/composables/usePolling.js";
 import {
 	getTokenAllowance,
 	getGasPrice,
@@ -285,6 +286,16 @@ const gasLoaded = ref(false);
 let controller = null;
 let historyTxHash = null;
 
+const gasPollingEnabled = computed(() => visible.value && !isHistoryMode.value && steps[2] !== STATUS.SUCCESS);
+usePolling(loadGasCost, 30000, gasPollingEnabled);
+
+function abortPending() {
+	if (controller) {
+		controller.abort();
+		controller = null;
+	}
+}
+
 // methods
 function formatAmount(val, unit) {
 	return ethers.parseUnits(val.toString(), unit);
@@ -300,6 +311,9 @@ function show({
 	txHash,
 	status
 }) {
+	// if dialog already open, prevent stale requests
+	abortPending();
+
 	// reset
 	currentPage.value= 1;
 	Object.assign(steps, createInitialSteps());
@@ -432,10 +446,7 @@ async function runStep2() {
 async function l2Mint(txHash) {
 	if (steps[3] === STATUS.LOADING) return;
 
-	if (controller) {
-		controller.abort();
-		controller = null;
-	}
+	abortPending();
 	controller = new AbortController();
 
 	steps[3] = STATUS.LOADING;
@@ -462,24 +473,9 @@ async function l2Mint(txHash) {
 	}
 }
 
-
-let gasTimer
 watch(visible, (val) => {
 	if (!val) {
-		if (controller) {
-			controller.abort();
-			controller = null;
-		}
-	}
-
-	if (val) {
-		if (!isHistoryMode.value) {
-			if (gasTimer) clearInterval(gasTimer);
-			loadGasCost();
-			gasTimer = setInterval(loadGasCost, 30000);
-		}
-	} else {
-		if (gasTimer) clearInterval(gasTimer);
+		abortPending();
 	}
 });
 

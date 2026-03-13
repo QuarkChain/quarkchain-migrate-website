@@ -59,6 +59,7 @@ const filteredList = computed(() => {
 	if (currentTag.value === 'All') {
 		return txList.value;
 	}
+	// TODO
 	return txList.value.filter(tx => tx.type.includes(currentTag.value));
 });
 
