@@ -90,6 +90,20 @@ export async function checkFinalizeStatus(l2TxHash, l1ChainId, l2ChainId) {
 	};
 }
 
+export async function checkFinalizeStatusByHash(l2TxHash, l1ChainId, l2ChainId, msgHash) {
+	const pL1 = getPublicClientL1(l1ChainId);
+	const pL2 = getPublicClientL2(l2ChainId);
+	const timeToFinalize = await pL1.getTimeToFinalize({
+		withdrawalHash: msgHash,
+		targetChain: pL2.chain,
+	});
+
+	return {
+		canFinalize: timeToFinalize.seconds === 0,
+		seconds: timeToFinalize.seconds,
+	};
+}
+
 export async function finalizeWithdrawal(l2TxHash, l1ChainId, l2ChainId) {
 	const { pL2, withdrawal } = await extractWithdrawal(l2TxHash, l2ChainId);
 	const pL1 = getPublicClientL1(l1ChainId);

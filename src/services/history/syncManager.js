@@ -70,7 +70,8 @@ async function runPoll(account, mySession, signal) {
 		const l1ChainId = store.state.l1ChainId;
 		const l2ChainId = store.state.l2ChainId;
 		const bridge = store.getters.Bridge;
-		await syncUserTransactions(l1ChainId, l2ChainId, bridge, account, {
+		const multicall = store.getters.Multicall;
+		await syncUserTransactions(l1ChainId, l2ChainId, bridge, multicall, account, {
 			signal,
 			onChunk: async () => {
 				// First-time sync can be slow; refresh periodically as chunks land.

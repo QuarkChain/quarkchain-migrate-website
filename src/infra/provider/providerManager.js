@@ -2,26 +2,30 @@ import { ethers } from 'ethers'
 import { NETWORKS } from "@/config/networks.js";
 
 export function getL1Provider(targetChainId) {
+	const chainIdNum = Number(targetChainId);
 	const currentWalletChainId = window.ethereum?.chainId;
-	if (currentWalletChainId === targetChainId) {
-		console.log(`[Provider] Using Wallet RPC for ${targetChainId}`);
-		return new ethers.BrowserProvider(window.ethereum);
+	const isWalletMatched = currentWalletChainId && parseInt(currentWalletChainId, 16) === chainIdNum;
+
+	const rpcConfigs = [];
+	if (isWalletMatched) {
+		rpcConfigs.push({
+			provider: new ethers.BrowserProvider(window.ethereum),
+			priority: 0,
+			stallTimeout: 3000,
+			weight: 2
+		});
 	}
 
 	const rpcPool = NETWORKS[targetChainId]?.rpcUrls || [];
-	if (rpcPool.length === 0) {
-		throw new Error(`No RPC configuration found for ${targetChainId}`);
-	}
+	rpcPool.forEach((url) => {
+		rpcConfigs.push({
+			provider: new ethers.JsonRpcProvider(url, chainIdNum, { staticNetwork: true }),
+			priority: 1,
+			stallTimeout: 2000
+		});
+	});
 
-	const configs = rpcPool.map((url, index) => ({
-		provider: new ethers.JsonRpcProvider(url, Number(targetChainId), {
-			staticNetwork: true
-		}),
-		priority: index,
-		stallTimeout: 1200,
-		weight: 1
-	}));
-	return new ethers.FallbackProvider(configs);
+	return new ethers.FallbackProvider(rpcConfigs);
 }
 
 export function getL2Provider(targetChainId) {

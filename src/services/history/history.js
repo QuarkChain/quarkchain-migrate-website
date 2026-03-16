@@ -249,10 +249,10 @@ async function syncLayer(layer, chainId, bridgeAddress, userAddress, opts = {}) 
 	}
 }
 
-export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, address, opts = {}) {
+export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, multicall, account, opts = {}) {
 	await Promise.all([
-		syncLayer("L1", l1ChainId, bridge.L1StandardBridge, address, opts),
-		syncLayer("L2", l2ChainId, bridge.L2StandardBridge, address, opts)
+		syncLayer("L1", l1ChainId, bridge.L1StandardBridge, account, opts),
+		syncLayer("L2", l2ChainId, bridge.L2StandardBridge, account, opts)
 	]);
-	await syncPendingStatus(l1ChainId, l2ChainId, bridge, address, opts);
+	await syncPendingStatus(l1ChainId, l2ChainId, bridge, multicall, account, opts);
 }
