@@ -107,7 +107,7 @@ import { useStore } from 'vuex';
 import { TOKEN_LIST } from "@/config/tokens.js";
 import { NETWORKS } from "@/config/networks.js";
 import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/services/bridge/balanceService.js";
-import { txList, syncing } from "@/app/store/txStore.js";
+import { refreshLocalList } from "@/services/history/syncManager.js";
 
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
 import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
@@ -241,6 +241,7 @@ function handleActionClick() {
 
 function onFinish() {
 	fetchBalance();
+	refreshLocalList();
 }
 
 // -----------------------------

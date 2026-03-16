@@ -335,10 +335,11 @@ import { ethers } from 'ethers';
 import { computed, onUnmounted, reactive, ref, watch } from 'vue';
 import { useStore} from "vuex";
 import { Coin, InfoFilled, Timer, Wallet } from '@element-plus/icons-vue'
-import { ElMessage} from 'element-plus';
+import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import { usePolling } from "@/ui/composables/usePolling.js";
-import { BRIDGE_STATUS } from "@/config/constant.js";
+import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
+import { saveTransactions } from "@/services/history/db.js";
 import {
 	bridgeTokenToL1,
 	checkFinalizeStatus,
@@ -449,6 +450,8 @@ let countdownTimerFinalize = null;
 
 const gasPollingEnabled = computed(() => visible.value && steps[5] !== STATUS.SUCCESS);
 usePolling(loadGasCost, 30000, gasPollingEnabled);
+
+const hasStateChanged = ref(false);
 
 // ----------------------------
 // Utils
@@ -669,7 +672,26 @@ async function btnWithdraw() {
 			steps[1] = STATUS.SUCCESS;
 			steps[2] = STATUS.LOADING;
 			ElMessage.success("Bridge submitted.");
+			const currentTimestamp = Math.floor(Date.now() / 1000);
+			const { address, decimals } = L2Token.value;
+			const value = ethers.parseUnits(amount.toString(), decimals);
+			await saveTransactions({
+				id: receipt.hash,
+				address: account.value,
+				direction: BRIDGE_DIRECTION.L2_TO_L1,
+				hash: receipt.hash,
+				msgHash: null,
+				token: address,
+				from: account.value,
+				to: L2StandardBridge.value,
+				amount: value.toString(),
+				timestamp: currentTimestamp,
+				blockNumber: receipt.blockNumber,
+				status: BRIDGE_STATUS.UNKNOWN,
+				remaining: 24 * 60 * 60
+			});
 
+			hasStateChanged.value = true;
 			currentL2TxHash.value = receipt.hash;
 			startProvePolling(receipt.hash);
 		} else {
@@ -698,6 +720,12 @@ async function startProvePolling(hash) {
 			if (result.canProve) {
 				steps[2] = STATUS.SUCCESS;
 				steps[3] = STATUS.IDLE;
+				await saveTransactions({
+					id: hash,
+					remaining: 0,
+					status: BRIDGE_STATUS.READY_TO_PROVE
+				});
+				hasStateChanged.value = true;
 				if (provePollTimer) clearInterval(provePollTimer);
 				if (countdownTimerProve) clearInterval(countdownTimerProve);
 				provePollTimer = null;
@@ -705,6 +733,12 @@ async function startProvePolling(hash) {
 				proveRemainingSeconds.value = 0;
 			} else {
 				proveRemainingSeconds.value = result.seconds;
+				await saveTransactions({
+					id: currentL2TxHash.value,
+					remaining: result.seconds,
+					status: BRIDGE_STATUS.WAITING_PROVE_WINDOW
+				});
+				hasStateChanged.value = true;
 			}
 		} catch (e) {
 			console.error('Prove poll error:', e);
@@ -734,6 +768,12 @@ async function btnProve() {
 		if (receipt?.status === 'success' || receipt?.status === 1) {
 			steps[3] = STATUS.SUCCESS;
 			steps[4] = STATUS.LOADING;
+			await saveTransactions({
+				id: currentL2TxHash.value,
+				remaining: 7 * 24 * 60 * 60,
+				status: BRIDGE_STATUS.CHALLENGE_PERIOD
+			});
+			hasStateChanged.value = true;
 			ElMessage.success(`Prove success.`);
 			startFinalizePolling(currentL2TxHash.value);
 		} else {
@@ -760,6 +800,12 @@ async function startFinalizePolling(hash) {
 			if (result.canFinalize) {
 				steps[4] = STATUS.SUCCESS;
 				steps[5] = STATUS.IDLE;
+				await saveTransactions({
+					id: hash,
+					remaining: 0,
+					status: BRIDGE_STATUS.READY_TO_WITHDRAW
+				});
+				hasStateChanged.value = true;
 				if (finalizePollTimer) clearInterval(finalizePollTimer);
 				if (countdownTimerFinalize) clearInterval(countdownTimerFinalize);
 				finalizePollTimer = null;
@@ -767,6 +813,13 @@ async function startFinalizePolling(hash) {
 				finalizeRemainingSeconds.value = 0;
 			} else {
 				finalizeRemainingSeconds.value = result.seconds;
+
+				await saveTransactions({
+					id: hash,
+					remaining: result.seconds,
+					status: BRIDGE_STATUS.CHALLENGE_PERIOD
+				});
+				hasStateChanged.value = true;
 			}
 		} catch (e) {
 			console.error('Finalize poll error:', e);
@@ -794,13 +847,23 @@ async function btnFinalize() {
 				L2ChainId.value
 		);
 		if (receipt?.status === 'success' || receipt?.status === 1) {
-			ElMessage.success(`Finalize withdraw success`);
 			steps[5] = STATUS.SUCCESS;
-			emit('finish');
+			await saveTransactions({
+				id: currentL2TxHash.value,
+				remaining: 0,
+				status: BRIDGE_STATUS.COMPLETED
+			});
+			ElMessage.success(`Finalize withdraw success`);
 		} else {
-			steps[5] = STATUS.IDLE;
+			steps[5] = STATUS.FAILED;
+			await saveTransactions({
+				id: currentL2TxHash.value,
+				remaining: 0,
+				status: BRIDGE_STATUS.FAILED
+			});
 			ElMessage.error("Transaction reverted.");
 		}
+		hasStateChanged.value = true;
 	} catch (e) {
 		console.error('Finalize error:', e);
 		steps[5] = STATUS.IDLE;
@@ -814,6 +877,10 @@ watch(visible, (val) => {
 		stopAllTimers();
 		proveRemainingSeconds.value = 0;
 		finalizeRemainingSeconds.value = 0;
+	}
+	if (!val && hasStateChanged.value) {
+		hasStateChanged.value = false;
+		emit('finish');
 	}
 });
 

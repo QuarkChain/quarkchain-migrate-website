@@ -40,6 +40,8 @@ import { ref, computed } from 'vue';
 import { txList, syncing } from "@/app/store/txStore.js";
 import { BRIDGE_DIRECTION } from "@/config/constant.js";
 import { NETWORKS } from "@/config/networks.js";
+import { refreshLocalList } from "@/services/history/syncManager.js";
+
 import ActivityHeader from '@/ui/components/ActivityHeader.vue';
 import ActivityItem from '@/ui/components/ActivityItem.vue';
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
@@ -86,6 +88,7 @@ function openTx(tx) {
 }
 
 function onFinish() {
+	refreshLocalList();
 }
 
 defineProps(['modelValue']);

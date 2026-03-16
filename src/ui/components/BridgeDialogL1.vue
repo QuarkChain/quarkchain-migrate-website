@@ -228,7 +228,7 @@ import {
 	bridgeToken,
 	waitForL2ERC20Bridge
 } from "@/services/bridge/l1ToL2.js";
-import { BRIDGE_STATUS } from "@/config/constant.js";
+import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 import { saveTransactions } from "@/services/history/db.js";
 
 const emit = defineEmits(['finish']);
@@ -241,9 +241,10 @@ const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
 // global state
 const visible = ref(false);
-const currentPage = ref(1)
-const mode = ref('new') // 'new' | 'history'
-const isHistoryMode = computed(() => mode.value === 'history')
+const currentPage = ref(1);
+const mode = ref('new'); // 'new' | 'history'
+const isHistoryMode = computed(() => mode.value === 'history');
+const hasStateChanged = ref(false);
 
 // props, page 1
 const DEFAULT_NETWORK = {name: '', icon: '', explorer: '', chainId: ''};
@@ -408,9 +409,6 @@ async function runStep1() {
 			steps[1] = STATUS.SUCCESS;
 			steps[2] = STATUS.IDLE;
 			ElMessage.success("Approved successfully.");
-
-			// TODO insert db
-			// saveTransactions();
 		} else {
 			steps[1] = STATUS.IDLE;
 			ElMessage.error("Approved amount < migration amount.");
@@ -431,6 +429,26 @@ async function runStep2() {
 			steps[2] = STATUS.SUCCESS
 			steps[3] = STATUS.IDLE;
 			ElMessage.success("Bridge submitted.");
+
+			const currentTimestamp = Math.floor(Date.now() / 1000);
+			const { address, decimals } = L1Token.value;
+			const value = ethers.parseUnits(amount.toString(), decimals);
+			await saveTransactions({
+				id: receipt.hash,
+				address: account.value,
+				direction: BRIDGE_DIRECTION.L1_TO_L2,
+				hash: receipt.hash,
+				msgHash: null,
+				token: address,
+				from: account.value,
+				to: L1StandardBridge.value,
+				amount: value.toString(),
+				timestamp: currentTimestamp,
+				blockNumber: receipt.blockNumber,
+				status: BRIDGE_STATUS.UNKNOWN,
+				remaining: 3 * 60
+			});
+			hasStateChanged.value = true;
 
 			l2Mint(receipt.hash);
 		} else {
@@ -456,14 +474,24 @@ async function l2Mint(txHash) {
 		steps[3] = STATUS.SUCCESS;
 		if (result.status === 'SUCCESS') {
 			steps[4] = STATUS.SUCCESS;
+			await saveTransactions({
+				id: txHash,
+				remaining: 0,
+				status: BRIDGE_STATUS.COMPLETED
+			});
+
 			ElMessage.success("Bridge completed.");
-			emit('finish');
 		} else if (result.status === 'FAILED') {
 			steps[4] = STATUS.FAILED;
+			await saveTransactions({
+				id: txHash,
+				remaining: 0,
+				status: BRIDGE_STATUS.FAILED
+			});
+
 			ElMessage.error("Bridge execution failed on L2.");
 		}
-
-		//  TODO  update
+		hasStateChanged.value = true;
 	} catch (e) {
 		if (e?.name === 'AbortError' || controller?.signal?.aborted) {
 			return;
@@ -476,6 +504,10 @@ async function l2Mint(txHash) {
 watch(visible, (val) => {
 	if (!val) {
 		abortPending();
+	}
+	if (!val && hasStateChanged.value) {
+		hasStateChanged.value = false;
+		emit('finish');
 	}
 });
 

@@ -1,7 +1,7 @@
 // services/history/syncManager.js
 
 import store from "@/app/store/index.js";
-import { txList, syncing } from "@/app/store/txStore.js";
+import { syncing, txList } from "@/app/store/txStore.js";
 import { syncUserTransactions } from "@/services/history/history.js";
 import { loadTransactions } from "@/services/history/db.js";
 
@@ -97,4 +97,15 @@ function scheduleNext(account, mySession, signal) {
 	timer = setTimeout(() => {
 		runPoll(account, mySession, signal);
 	}, POLL_INTERVAL);
+}
+
+export async function refreshLocalList() {
+	const account = store.state.account;
+	if (!account) return;
+
+	try {
+		txList.value = await loadTransactions(account);
+	} catch (err) {
+		console.error("refresh local list error", err);
+	}
 }
