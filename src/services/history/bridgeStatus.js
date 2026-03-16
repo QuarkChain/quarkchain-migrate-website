@@ -71,7 +71,12 @@ async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal) {
 		// l2 to l1
 		try {
 			// can withdraw
-			const finalize = await checkFinalizeStatusByHash(tx.hash, l1ChainId, l2ChainId, tx.msgHash);
+			let finalize = { canFinalize: false, seconds: 0 };
+			try {
+				finalize = await checkFinalizeStatusByHash(tx.hash, l1ChainId, l2ChainId, tx.msgHash);
+			} catch (e) {
+			}
+
 			if (finalize.canFinalize) {
 				tx.status = BRIDGE_STATUS.READY_TO_WITHDRAW;
 				tx.remaining = 0;

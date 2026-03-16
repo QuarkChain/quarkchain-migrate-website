@@ -26,11 +26,19 @@ export function getPublicClientL1(chainIdHex) {
 	if (typeof window !== 'undefined' && window.ethereum?.chainId === chainIdHex) {
 		transports.push(custom(window.ethereum));
 	}
-	rpcUrls.forEach(url => transports.push(http(url)));
+	rpcUrls.forEach(url => {
+		transports.push(http(url, {
+			timeout: 10000,
+		}));
+	});
 
 	return createPublicClient({
 		chain,
-		transport: fallback(transports, { rank: true }),
+		transport: fallback(transports, {
+			rank: false,
+			retryCount: 2,
+			retryDelay: 1000,
+		}),
 	}).extend(publicActionsL1());
 }
 
