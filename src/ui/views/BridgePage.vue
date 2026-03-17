@@ -108,6 +108,7 @@ import { TOKEN_LIST } from "@/config/tokens.js";
 import { NETWORKS } from "@/config/networks.js";
 import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/services/bridge/balanceService.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
+import { formatTokenAmount } from "@/infra/uitls/utils.js";
 
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
 import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
@@ -198,7 +199,7 @@ async function fetchBalance() {
 			rawBalance = await getErc20BalanceByL2(L2ChainId.value, address, account.value);
 		}
 
-		balance.value = parseFloat(ethers.formatUnits(rawBalance, decimals)).toFixed(4);
+		balance.value = formatTokenAmount(rawBalance, decimals);
 	} catch (e) {
 		console.error("Fetch balance failed:", e);
 		balance.value = '0.0000';

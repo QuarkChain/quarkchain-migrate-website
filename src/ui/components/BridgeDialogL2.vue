@@ -340,6 +340,7 @@ import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import { usePolling } from "@/ui/composables/usePolling.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 import { saveTransactions } from "@/services/history/db.js";
+import { getCeiledTime } from "@/infra/uitls/utils.js";
 import {
 	bridgeTokenToL1,
 	checkFinalizeStatus,
@@ -459,20 +460,9 @@ const hasStateChanged = ref(false);
 function formatRemainingTime(seconds) {
 	if (seconds <= 0) return '';
 
-	const SECONDS_PER_MINUTE = 60;
-	const SECONDS_PER_HOUR = 3600;
-	const SECONDS_PER_DAY = 86400;
-
-	if (seconds >= SECONDS_PER_DAY) {
-		const days = Math.ceil(seconds / SECONDS_PER_DAY);
-		return `~${days} ${days > 1 ? 'days' : 'day'}`;
-	}
-	if (seconds >= SECONDS_PER_HOUR) {
-		const hours = Math.ceil(seconds / SECONDS_PER_HOUR);
-		return `~${hours} ${hours > 1 ? 'hours' : 'hour'}`;
-	}
-	const mins = Math.ceil(seconds / SECONDS_PER_MINUTE);
-	return `~${mins} mins`;
+	const { val, unit } = getCeiledTime(seconds);
+	const unitStr = unit === 'min' ? 'mins' : (val > 1 ? unit + 's' : unit);
+	return `~${val} ${unitStr}`;
 }
 const formattedProveCountdown = computed(() => formatRemainingTime(proveRemainingSeconds.value));
 const formattedFinalizeCountdown = computed(() => formatRemainingTime(finalizeRemainingSeconds.value));
@@ -669,7 +659,7 @@ async function btnWithdraw() {
 			ElMessage.success("Bridge submitted.");
 			const currentTimestamp = Math.floor(Date.now() / 1000);
 			const { address, decimals } = L2Token.value;
-			const value = ethers.parseUnits(amount.toString(), decimals);
+			const value = ethers.parseUnits(amount.value.toString(), decimals);
 			await saveTransactions({
 				id: receipt.hash,
 				address: account.value,

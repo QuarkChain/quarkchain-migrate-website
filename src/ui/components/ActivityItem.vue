@@ -65,10 +65,10 @@
 </template>
 
 <script setup>
-import { ethers } from "ethers";
 import { computed } from 'vue';
 import { TOKEN_LIST } from "@/config/tokens.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
+import { formatTokenAmount, getCeiledTime } from "@/infra/uitls/utils.js";
 import ethereumIcon from '@/assets/l1.svg'
 import quarkIcon from '@/assets/quarkchain.svg'
 
@@ -129,20 +129,14 @@ const getNetIcon = (type) => {
 
 const formatAmount = (amt) => {
 	if (!amt || !decimals) return 0;
-	return parseFloat(ethers.formatUnits(amt, decimals.value)).toFixed(2);
+	return formatTokenAmount(amt, decimals.value);
 };
 
 function formatRemaining(sec) {
-	if (!sec) return ""
-
-	const days = Math.floor(sec / 86400)
-	if (days > 0) return `~${days} days to go`
-
-	const hours = Math.floor(sec / 3600)
-	if (hours > 0) return `~${hours} hours to go`
-
-	const mins = Math.floor(sec / 60)
-	return `~${mins} min`
+	if (!sec || sec <= 0) return "";
+	const { val, unit } = getCeiledTime(sec);
+	const unitStr = val > 1 ? unit + 's' : unit;
+	return `~${val} ${unitStr} to go`;
 }
 
 function getBridgeUI(tx) {

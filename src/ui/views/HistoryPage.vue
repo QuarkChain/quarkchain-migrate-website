@@ -41,6 +41,7 @@ import { NETWORKS } from "@/config/networks.js";
 // Store / Services
 import { txList, syncing } from "@/app/store/txStore.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
+import { formatTokenAmount } from "@/infra/uitls/utils.js";
 
 // Components
 import ActivityHeader from '@/ui/components/ActivityHeader.vue';
@@ -105,7 +106,7 @@ function openTx(tx) {
 		status: tx.status,
 		remainingSeconds: tx.remaining,
 		token: tx.tokenObj.token,
-		amount: ethers.formatUnits(tx.amount, tx.tokenObj.contract.decimals).slice(0, 6)
+		amount: formatTokenAmount(tx.amount, tx.tokenObj.contract.decimals)
 	};
 
 	if (tx.direction === BRIDGE_DIRECTION.L1_TO_L2) {

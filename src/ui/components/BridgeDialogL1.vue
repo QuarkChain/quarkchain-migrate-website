@@ -432,7 +432,7 @@ async function runStep2() {
 
 			const currentTimestamp = Math.floor(Date.now() / 1000);
 			const { address, decimals } = L1Token.value;
-			const value = ethers.parseUnits(amount.value.toString(), decimals);
+			const value = formatAmount(amount.value.toString(), decimals);
 			await saveTransactions({
 				id: receipt.hash,
 				address: account.value,
