@@ -38,10 +38,15 @@
 <script setup>
 import { ref } from 'vue'
 
+const DEFAULT_CONFIG = {
+	origin: 'Any chain',
+	status: 'All'
+}
+
 const emit = defineEmits(['apply'])
 
 const dialogVisible = ref(false)
-const tempConfig = ref()
+const tempConfig = ref({ ...DEFAULT_CONFIG })
 
 const open = (initialConfig) => {
 	tempConfig.value = { ...initialConfig }
@@ -54,7 +59,7 @@ const handleApply = () => {
 }
 
 const onClear = () => {
-	tempConfig.value = { origin: 'Any chain', status: 'All' }
+	tempConfig.value = { ...DEFAULT_CONFIG }
 }
 
 defineExpose({ open })
@@ -71,7 +76,7 @@ defineExpose({ open })
 	.label {
 		font-weight: 600;
 		font-size: 14px;
-		color:#212121;
+		color: #212121;
 	}
 }
 
@@ -131,12 +136,14 @@ defineExpose({ open })
 	outline: none;
 }
 
+.filter-dialog .filter-select.el-select {
+	width: 180px;
+}
 .filter-select {
 	--el-color-primary: #181ea9;
 	--el-select-input-focus-border-color: #181ea9;
 	--el-border-color-hover: #181ea9;
-	border-radius: 12px !important;
-	width: 180px !important;
+	border-radius: 12px;
 }
 
 .el-select__popper .el-select-dropdown__item.is-selected {

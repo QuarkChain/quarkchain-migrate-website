@@ -35,16 +35,25 @@
 import { ethers } from "ethers";
 import { useStore } from 'vuex';
 import { ref, computed } from 'vue';
-import { txList, syncing } from "@/app/store/txStore.js";
+// Constants
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 import { NETWORKS } from "@/config/networks.js";
+// Store / Services
+import { txList, syncing } from "@/app/store/txStore.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
 
+// Components
 import ActivityHeader from '@/ui/components/ActivityHeader.vue';
 import ActivityItem from '@/ui/components/ActivityItem.vue';
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
 import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
-import FilterDialog from '@/ui/components/FilterDialog.vue'
+import FilterDialog from '@/ui/components/FilterDialog.vue';
+
+// Default filter config
+const DEFAULT_FILTER = {
+	origin: 'Any chain',
+	status: 'All'
+};
 
 const isVisible = defineModel({ default: false });
 
@@ -56,17 +65,21 @@ const dialogL1 = ref();
 const dialogL2 = ref();
 const filterDialog = ref();
 
-const filterConfig = ref({ origin: 'Any chain', status: 'All' });
+const filterConfig = ref({ ...DEFAULT_FILTER });
 
 const filteredList = computed(() => {
-	let list = txList.value
-	if (filterConfig.value.origin && filterConfig.value.origin !== 'Any chain') {
+	let list = txList.value;
+
+	// Origin filter
+	if (filterConfig.value.origin !== DEFAULT_FILTER.origin) {
 		const targetDirection = filterConfig.value.origin === 'Ethereum'
 				? BRIDGE_DIRECTION.L1_TO_L2
 				: BRIDGE_DIRECTION.L2_TO_L1;
 		list = list.filter(tx => tx.direction === targetDirection);
 	}
-	if (filterConfig.value.status && filterConfig.value.status !== 'All') {
+
+	// Status filter
+	if (filterConfig.value.status !== DEFAULT_FILTER.status) {
 		const isCompleted = filterConfig.value.status === 'Completed';
 		list = list.filter(tx => {
 			if (isCompleted) {
@@ -76,8 +89,9 @@ const filteredList = computed(() => {
 			}
 		});
 	}
+
 	return list;
-})
+});
 
 function onOpenFilter() {
 	filterDialog.value.open(filterConfig.value);
@@ -90,18 +104,18 @@ function openTx(tx) {
 		txHash: tx.hash,
 		status: tx.status,
 		remainingSeconds: tx.remaining,
-	}
-	const {token, contract} = tx.tokenObj;
-	params.token = token;
-	params.amount = parseFloat(ethers.formatUnits(tx.amount, contract.decimals)).toFixed(2);
+		token: tx.tokenObj.token,
+		amount: ethers.formatUnits(tx.amount, tx.tokenObj.contract.decimals).slice(0, 6)
+	};
+
 	if (tx.direction === BRIDGE_DIRECTION.L1_TO_L2) {
 		params.fromNetwork = NETWORKS[L1ChainId.value];
 		params.toNetwork = NETWORKS[L2ChainId.value];
-		dialogL1.value.show(params)
+		dialogL1.value.show(params);
 	} else {
 		params.fromNetwork = NETWORKS[L2ChainId.value];
 		params.toNetwork = NETWORKS[L1ChainId.value];
-		dialogL2.value.show(params)
+		dialogL2.value.show(params);
 	}
 }
 
@@ -109,11 +123,11 @@ function onFinish() {
 	refreshLocalList();
 }
 
-function onFilterApply(newConfig){
+function onFilterApply(newConfig) {
 	filterConfig.value = {
-		origin: newConfig.origin ?? 'Any chain',
-		status: newConfig.status ?? 'All'
-	}
+		origin: newConfig.origin ?? DEFAULT_FILTER.origin,
+		status: newConfig.status ?? DEFAULT_FILTER.status
+	};
 }
 </script>
 
