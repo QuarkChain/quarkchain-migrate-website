@@ -432,7 +432,7 @@ async function runStep2() {
 
 			const currentTimestamp = Math.floor(Date.now() / 1000);
 			const { address, decimals } = L1Token.value;
-			const value = ethers.parseUnits(amount.toString(), decimals);
+			const value = ethers.parseUnits(amount.value.toString(), decimals);
 			await saveTransactions({
 				id: receipt.hash,
 				address: account.value,
@@ -456,6 +456,7 @@ async function runStep2() {
 			ElMessage.error("Bridge failed.");
 		}
 	} catch (e) {
+		console.log(e);
 		steps[2] = STATUS.IDLE;
 		ElMessage.error("Bridge failed.");
 	}
@@ -493,9 +494,15 @@ async function l2Mint(txHash) {
 		}
 		hasStateChanged.value = true;
 	} catch (e) {
-		if (e?.name === 'AbortError' || controller?.signal?.aborted) {
+		const isCancel =
+				e?.name === 'AbortError' ||
+				e?.message?.toLowerCase().includes('abort') ||
+				e?.message?.toLowerCase().includes('canceled') ||
+				controller?.signal?.aborted;
+		if (isCancel) {
 			return;
 		}
+
 		steps[3] = STATUS.DISABLED;
 		ElMessage.error("Unexpected error occurred.");
 	}

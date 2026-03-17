@@ -524,7 +524,7 @@ async function show({
 		// but status in db syncs every ~3 minutes, so we must check finalized state first
 		const normalized = String(status || '');
 		const remain = Number.isFinite(Number(remainingSeconds)) ? Number(remainingSeconds) : undefined;
-		await initFromHistoryStatus(normalized, remain);
+		initFromHistoryStatus(normalized, remain);
 	}
 }
 
@@ -562,57 +562,52 @@ async function initFromHistoryStatus(normalizedStatus, remaining) {
 	steps[1] = STATUS.SUCCESS; // withdraw already happened (txHash exists)
 
 	if (normalizedStatus === BRIDGE_STATUS.COMPLETED) {
-		steps[2] = STATUS.SUCCESS;
-		steps[3] = STATUS.SUCCESS;
-		steps[4] = STATUS.SUCCESS;
-		steps[5] = STATUS.SUCCESS;
+		steps[2] = steps[3] = steps[4] = steps[5] = STATUS.SUCCESS;
+		stopAllTimers();
 		return;
 	}
-	if (normalizedStatus === BRIDGE_STATUS.FAILED) {
-		steps[2] = STATUS.SUCCESS;
-		steps[3] = STATUS.SUCCESS;
-		steps[4] = STATUS.SUCCESS;
-		steps[5] = STATUS.FAILED;
-		return;
-	}
-	const finalized = await tryResolveFinalizedFromChain(txHash.value);
-	if (finalized) {
-		steps[2] = STATUS.SUCCESS;
-		steps[3] = STATUS.SUCCESS;
-		steps[4] = STATUS.SUCCESS;
-		steps[5] = STATUS.SUCCESS;
 
+	if (normalizedStatus === BRIDGE_STATUS.FAILED) {
+		steps[2] = steps[3] = steps[4] = STATUS.SUCCESS;
+		steps[5] = STATUS.FAILED;
 		stopAllTimers();
 		return;
 	}
 
 	if (normalizedStatus === BRIDGE_STATUS.READY_TO_WITHDRAW) {
-		steps[2] = STATUS.SUCCESS;
-		steps[3] = STATUS.SUCCESS;
-		steps[4] = STATUS.SUCCESS;
+		steps[2] = steps[3] = steps[4] = STATUS.SUCCESS;
 		steps[5] = STATUS.IDLE;
-		return;
+	} else if (normalizedStatus === BRIDGE_STATUS.CHALLENGE_PERIOD) {
+		steps[2] = steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.LOADING;
+		if (remaining !== undefined) finalizeRemainingSeconds.value = remaining;
+	} else if (normalizedStatus === BRIDGE_STATUS.READY_TO_PROVE) {
+		steps[2] = STATUS.SUCCESS;
+		steps[3] = STATUS.IDLE;
+	} else {
+		steps[2] = STATUS.LOADING;
+		if (remaining !== undefined) proveRemainingSeconds.value = remaining;
+	}
+
+	const memoHash = txHash.value;
+	try {
+		const finalized = await tryResolveFinalizedFromChain(memoHash);
+		if (memoHash !== txHash.value) return;
+
+		if (finalized) {
+			steps[2] = steps[3] = steps[4] = steps[5] = STATUS.SUCCESS;
+			stopAllTimers();
+			return;
+		}
+	} catch (e) {
+		console.error(e);
 	}
 
 	if (normalizedStatus === BRIDGE_STATUS.CHALLENGE_PERIOD) {
-		steps[2] = STATUS.SUCCESS;
-		steps[3] = STATUS.SUCCESS;
-		steps[4] = STATUS.LOADING;
-		if (remaining !== undefined) finalizeRemainingSeconds.value = remaining;
 		startFinalizePolling(txHash.value);
-		return;
+	} else if (steps[2] === STATUS.LOADING) {
+		startProvePolling(txHash.value);
 	}
-
-	if (normalizedStatus === BRIDGE_STATUS.READY_TO_PROVE) {
-		steps[2] = STATUS.SUCCESS;
-		steps[3] = STATUS.IDLE;
-		return;
-	}
-
-	// waiting-prove-window / unknown => poll prove availability
-	steps[2] = STATUS.LOADING;
-	if (remaining !== undefined) proveRemainingSeconds.value = remaining;
-	startProvePolling(txHash.value);
 }
 
 function goPrevPage() {
