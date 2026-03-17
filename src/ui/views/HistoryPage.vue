@@ -1,36 +1,34 @@
 <template>
-	<div>
-		<el-dialog
-				:model-value="modelValue"
-				@update:model-value="$emit('update:modelValue', $event)"
-				class="history-dialog"
-				fullscreen >
-			<div class="history-page">
-				<ActivityHeader @filter="isFilterOpen = !isFilterOpen"/>
+	<el-dialog
+			v-model="isVisible"
+			class="history-dialog"
+			fullscreen>
+		<div class="history-page">
+			<ActivityHeader @filter="onOpenFilter"/>
 
-				<div v-if="syncing" class="loading-container">
-					<div class="spinner"></div>
-				</div>
+			<div v-if="syncing" class="loading-container">
+				<div class="spinner"></div>
+			</div>
 
-				<div class="list-container">
-					<ActivityItem
-							v-for="tx in filteredList"
-							:key="`${tx.hash}-${tx.logIndex}`"
-							:tx="tx"
-							@open="openTx"
-					/>
+			<div class="list-container">
+				<ActivityItem
+						v-for="tx in filteredList"
+						:key="`${tx.hash}-${tx.logIndex}`"
+						:tx="tx"
+						@open="openTx"
+				/>
 
-					<div v-if="filteredList.length === 0 && !syncing" class="empty">
-						<div class="empty-title">No activity yet</div>
-						<div class="empty-desc">Your transactions will appear here</div>
-					</div>
+				<div v-if="filteredList.length === 0 && !syncing" class="empty">
+					<div class="empty-title">No activity yet</div>
+					<div class="empty-desc">Your transactions will appear here</div>
 				</div>
 			</div>
-		</el-dialog>
+		</div>
+	</el-dialog>
 
-		<BridgeDialogL1 ref="dialogL1" @finish="onFinish" />
-		<BridgeDialogL2 ref="dialogL2" @finish="onFinish" />
-	</div>
+	<BridgeDialogL1 ref="dialogL1" @finish="onFinish" />
+	<BridgeDialogL2 ref="dialogL2" @finish="onFinish" />
+	<FilterDialog ref="filterDialog" @apply="onFilterApply" />
 </template>
 
 <script setup>
@@ -38,7 +36,7 @@ import { ethers } from "ethers";
 import { useStore } from 'vuex';
 import { ref, computed } from 'vue';
 import { txList, syncing } from "@/app/store/txStore.js";
-import { BRIDGE_DIRECTION } from "@/config/constant.js";
+import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 import { NETWORKS } from "@/config/networks.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
 
@@ -46,6 +44,9 @@ import ActivityHeader from '@/ui/components/ActivityHeader.vue';
 import ActivityItem from '@/ui/components/ActivityItem.vue';
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
 import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
+import FilterDialog from '@/ui/components/FilterDialog.vue'
+
+const isVisible = defineModel({ default: false });
 
 const store = useStore();
 const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
@@ -53,17 +54,34 @@ const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
 const dialogL1 = ref();
 const dialogL2 = ref();
+const filterDialog = ref();
 
-const isFilterOpen = ref(false);
-const currentTag = ref('All');
+const filterConfig = ref({ origin: 'Any chain', status: 'All' });
 
 const filteredList = computed(() => {
-	if (currentTag.value === 'All') {
-		return txList.value;
+	let list = txList.value
+	if (filterConfig.value.origin && filterConfig.value.origin !== 'Any chain') {
+		const targetDirection = filterConfig.value.origin === 'Ethereum'
+				? BRIDGE_DIRECTION.L1_TO_L2
+				: BRIDGE_DIRECTION.L2_TO_L1;
+		list = list.filter(tx => tx.direction === targetDirection);
 	}
-	// TODO
-	return txList.value.filter(tx => tx.type.includes(currentTag.value));
-});
+	if (filterConfig.value.status && filterConfig.value.status !== 'All') {
+		const isCompleted = filterConfig.value.status === 'Completed';
+		list = list.filter(tx => {
+			if (isCompleted) {
+				return tx.status === BRIDGE_STATUS.COMPLETED || tx.status === BRIDGE_STATUS.FAILED;
+			} else {
+				return tx.status !== BRIDGE_STATUS.COMPLETED && tx.status !== BRIDGE_STATUS.FAILED;
+			}
+		});
+	}
+	return list;
+})
+
+function onOpenFilter() {
+	filterDialog.value.open(filterConfig.value);
+}
 
 function openTx(tx) {
 	const params = {
@@ -91,8 +109,12 @@ function onFinish() {
 	refreshLocalList();
 }
 
-defineProps(['modelValue']);
-defineEmits(['update:modelValue']);
+function onFilterApply(newConfig){
+	filterConfig.value = {
+		origin: newConfig.origin ?? 'Any chain',
+		status: newConfig.status ?? 'All'
+	}
+}
 </script>
 
 <style scoped lang="less">
@@ -158,9 +180,9 @@ defineEmits(['update:modelValue']);
 }
 
 .history-dialog .el-dialog__header {
-	position: absolute;
+	position: fixed;
 	top: 0;
-	right: 0;
+	right: 15px;
 	z-index: 10;
 	padding: 0 !important;
 	margin: 0 !important;
