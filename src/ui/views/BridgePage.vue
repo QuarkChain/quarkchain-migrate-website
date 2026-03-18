@@ -110,6 +110,7 @@ import { TOKEN_LIST } from "@/config/tokens.js";
 import { NETWORKS } from "@/config/networks.js";
 import { getErc20BalanceByL1, getErc20BalanceByL2, getQKCBalanceByL2 } from "@/services/bridge/balanceService.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
+import { loadPendingTransactions } from "@/services/history/db.js";
 import { formatTokenAmount } from "@/infra/uitls/utils.js";
 
 // Components
@@ -225,9 +226,20 @@ function handleBridge() {
 	}
 }
 
-function onFinish() {
-	fetchBalance();
-	refreshLocalList();
+async function syncAndCheckActions() {
+	if (!account.value) return;
+	try {
+		await refreshLocalList();
+		const pendingTxs = await loadPendingTransactions(account.value);
+		hasAction.value = pendingTxs.length > 0;
+	} catch (e) {
+		console.error("Sync actions failed:", e);
+	}
+}
+
+async function onFinish() {
+	await fetchBalance();
+	await syncAndCheckActions();
 }
 
 function handleActionClick() {
@@ -235,7 +247,14 @@ function handleActionClick() {
 }
 
 // --- Watchers & Lifecycle ---
-watch([selectedTokenSymbol, isL1ToL2, account], fetchBalance, { immediate: true });
+watch([selectedTokenSymbol, isL1ToL2], fetchBalance, { immediate: true });
+
+watch([account], async () => {
+	if (!account.value) return;
+
+	await fetchBalance();
+	await syncAndCheckActions();
+}, { immediate: true });
 
 watch(isMigration, (newVal) => {
 	if (newVal) {
