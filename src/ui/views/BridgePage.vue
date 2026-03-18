@@ -64,7 +64,7 @@
             </span>
 						<span v-else>{{ balance }} {{ selectedTokenSymbol }}</span>
 					</div>
-					<el-button size="small" link class="max-btn" @click="setMax">MAX</el-button>
+					<el-button size="small" link class="max-btn" :disabled="isMigration && !isL1ToL2" @click="setMax">MAX</el-button>
 				</div>
 			</div>
 
@@ -112,23 +112,22 @@ import { getErc20BalanceByL1, getErc20BalanceByL2, getQKCBalanceByL2 } from "@/s
 import { refreshLocalList } from "@/services/history/syncManager.js";
 import { formatTokenAmount } from "@/infra/uitls/utils.js";
 
+// Components
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
 import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
-import MigrationDialog from '@/ui/components/MigrationDialog.vue'
+import MigrationDialog from '@/ui/components/MigrationDialog.vue';
 import HistoryButton from '@/ui/components/HistoryButton.vue';
 import HistoryPage from '@/ui/views/HistoryPage.vue';
 
+// --- Global State ---
 const store = useStore();
 const account = computed(() => store.state.account);
-const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
-const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
+const L1ChainId = computed(() => store.state.l1ChainId);
+const L2ChainId = computed(() => store.state.l2ChainId);
 
-// History state
-//  TODO
+// --- UI State ---
 const hasAction = ref(false);
 const showHistory = ref(false);
-
-// Bridge state
 const isL1ToL2 = ref(true); // true: L1->L2, false: L2->L1
 const amount = ref('');
 const selectedTokenSymbol = ref(TOKEN_LIST[0].symbol);
@@ -139,7 +138,10 @@ const progressDialogL1 = ref(null);
 const progressDialogL2 = ref(null);
 const migrationDialog = ref(null);
 
-// Computed: network config
+// --- Computed Logic ---
+const currentToken = computed(() => TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value));
+const isMigration = computed(() => selectedTokenSymbol.value === 'QKC');
+
 const fromNetworkConfig = computed(() => {
 	const chainId = isL1ToL2.value ? L1ChainId.value : L2ChainId.value;
 	return NETWORKS[chainId] || {};
@@ -149,57 +151,46 @@ const toNetworkConfig = computed(() => {
 	return NETWORKS[chainId] || {};
 });
 
-// Computed: token contract
 const currentTokenContract = computed(() => {
-	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value);
-	if (!token) return null;
-
+	if (!currentToken.value) return null;
 	const chainId = isL1ToL2.value ? L1ChainId.value : L2ChainId.value;
-	return token.networks[chainId] || null;
+	return currentToken.value.networks[chainId] || null;
 });
 
-// Computed: button state
 const isAmountValid = computed(() => {
-	const val = parseFloat(amount.value);
-	return val > 0 && val <= parseFloat(balance.value);
-});
-
-const isMigration = computed(() => {
-	return selectedTokenSymbol.value === 'QKC';
+	if (isMigration.value && !isL1ToL2.value) return false;
+	const val = parseFloat(amount.value || '0');
+	const bal = parseFloat(balance.value || '0');
+	return val > 0 && val <= bal;
 });
 
 const buttonText = computed(() => {
-	const val = parseFloat(amount.value);
-	if (!amount.value || val === 0) return 'Enter Amount';
+	if (isMigration.value && !isL1ToL2.value) {
+		return 'Migration Only via L1';
+	}
+	const val = parseFloat(amount.value || '0');
+	if (val <= 0) return 'Enter Amount';
 	if (val > parseFloat(balance.value)) return 'Insufficient Balance';
-	if (isMigration.value) return 'Start Migration';
-	return 'Bridge Assets';
+	return isMigration.value ? 'Start Migration' : 'Bridge Assets';
 });
 
-// -----------------------------
-// Methods
-// -----------------------------
+// --- Methods ---
 async function fetchBalance() {
 	if (!account.value || !currentTokenContract.value) {
 		balance.value = '0.0000';
 		return;
 	}
-
 	isBalanceLoading.value = true;
 	try {
 		const { address, decimals } = currentTokenContract.value;
 		let rawBalance;
-
 		if (isL1ToL2.value) {
 			rawBalance = await getErc20BalanceByL1(L1ChainId.value, address, account.value);
 		} else {
-			if (isMigration.value) {
-				rawBalance = await getQKCBalanceByL2(L2ChainId.value, account.value);
-			} else {
-				rawBalance = await getErc20BalanceByL2(L2ChainId.value, address, account.value);
-			}
+			rawBalance = isMigration.value
+					? await getQKCBalanceByL2(L2ChainId.value, account.value)
+					: await getErc20BalanceByL2(L2ChainId.value, address, account.value);
 		}
-
 		balance.value = formatTokenAmount(rawBalance, decimals);
 	} catch (e) {
 		console.error("Fetch balance failed:", e);
@@ -219,29 +210,19 @@ function setMax() {
 }
 
 function handleBridge() {
-	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value);
-	if (!token) return;
-
+	if (!isAmountValid.value) return;
 	if (isMigration.value) {
 		migrationDialog.value?.show(amount.value);
 	} else {
 		const payload = {
 			fromNetwork: fromNetworkConfig.value,
 			toNetwork: toNetworkConfig.value,
-			token,
+			token: currentToken.value,
 			amount: amount.value,
 			account: account.value,
 		};
-		if (isL1ToL2.value) {
-			progressDialogL1.value?.show(payload);
-		} else {
-			progressDialogL2.value?.show(payload);
-		}
+		(isL1ToL2.value ? progressDialogL1.value : progressDialogL2.value)?.show(payload);
 	}
-}
-
-function handleActionClick() {
-	showHistory.value = true
 }
 
 function onFinish() {
@@ -249,21 +230,28 @@ function onFinish() {
 	refreshLocalList();
 }
 
-// -----------------------------
-// Watchers
-// -----------------------------
+function handleActionClick() {
+	showHistory.value = true;
+}
+
+// --- Watchers & Lifecycle ---
 watch([selectedTokenSymbol, isL1ToL2, account], fetchBalance, { immediate: true });
+
+watch(isMigration, (newVal) => {
+	if (newVal) {
+		isL1ToL2.value = true;
+		amount.value = '';
+	}
+});
 
 let timer;
 onMounted(() => {
-	fetchBalance();
-	timer = setInterval(fetchBalance, 30_000);
+	timer = setInterval(fetchBalance, 30000);
 });
 onBeforeUnmount(() => {
 	clearInterval(timer);
 });
 </script>
-
 
 <style scoped lang="less">
 @primary-blue: #181ea9;
@@ -417,7 +405,7 @@ onBeforeUnmount(() => {
 				padding: 6px 16px;
 				font-size: 13px;
 				font-weight: 600;
-				&:hover {
+				&:hover:not(:disabled) {
 					background: @primary-hover;
 					box-shadow: 0 3px 10px rgba(24, 30, 169, 0.25);
 				}
@@ -428,28 +416,29 @@ onBeforeUnmount(() => {
 	.migration-alert-wrapper {
 		overflow: hidden;
 		display: block;
-	}
-	.migration-alert {
-		margin-top: 16px;
-		padding: 12px 16px;
-		border-radius: 12px;
-		background: rgba(245, 158, 11, 0.06);
-		border: 1px dashed rgba(245, 158, 11, 0.3);
 
-		.alert-title {
-			font-size: 14px;
-			font-weight: 700;
-			color: #f59e0b;
-			margin-bottom: 4px;
-			display: flex;
-			align-items: center;
-		}
+		.migration-alert {
+			margin-top: 16px;
+			padding: 12px 16px;
+			border-radius: 12px;
+			background: rgba(245, 158, 11, 0.06);
+			border: 1px dashed rgba(245, 158, 11, 0.3);
 
-		.alert-desc {
-			text-align: left;
-			font-size: 13px;
-			color: #6b7280;
-			line-height: 1.5;
+			.alert-title {
+				font-size: 14px;
+				font-weight: 700;
+				color: #f59e0b;
+				margin-bottom: 4px;
+				display: flex;
+				align-items: center;
+			}
+
+			.alert-desc {
+				text-align: left;
+				font-size: 13px;
+				color: #6b7280;
+				line-height: 1.5;
+			}
 		}
 	}
 
@@ -504,10 +493,16 @@ onBeforeUnmount(() => {
 			background: @migration-blue;
 			border-color: @migration-blue;
 			color: white;
-			&:hover {
+			&:hover:not(:disabled) {
 				background: @migration-hover;
 				border-color: @migration-hover;
 				box-shadow: 0 4px 12px @migration-glow;
+			}
+			&:disabled {
+				background: #ededf2 !important;
+				color: #8e91b5 !important;
+				border: 1px solid @migration-border !important;
+				cursor: not-allowed;
 			}
 		}
 
@@ -521,8 +516,8 @@ onBeforeUnmount(() => {
 			}
 			&:disabled {
 				background: #e2e4ed;
-				color: #a0a4b8;
-				opacity: 0.8;
+				color: #8e91b5 !important;
+				opacity: 0.9;
 			}
 		}
 		.network-box:hover .text .value {
