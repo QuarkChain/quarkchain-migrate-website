@@ -1,21 +1,11 @@
 <template>
 	<div class="bridge-container">
-		<p class="bridge-message">
-			Bridge assets between Ethereum and QuarkChain L2 securely and seamlessly.
-		</p>
-
 		<div class="bridge-header">
 			<div></div>
-			<div class="header-actions">
-				<HistoryButton
-						:hasAction="hasAction"
-						@click="handleActionClick"
-						style="margin-left: 20px;"
-				/>
-			</div>
+			<HistoryButton :hasAction="hasAction" @click="handleActionClick"/>
 		</div>
 
-		<el-card class="bridge-card">
+		<el-card class="bridge-card" :class="{ 'is-migration-mode': isMigration }">
 			<!-- Network Select -->
 			<div class="network-row">
 				<div class="network-box left" @click="switchNetwork">
@@ -78,6 +68,18 @@
 				</div>
 			</div>
 
+			<!-- Migration notice-->
+			<transition name="migration-collapse">
+				<div v-if="isMigration" class="migration-alert-wrapper">
+					<div class="migration-alert">
+						<div class="alert-content">
+							<p class="alert-title">⚠️ Note: One-Way Migration</p>
+							<p class="alert-desc">ERC-20 QKC will be converted to L2 Native Token. This cannot be undone.</p>
+						</div>
+					</div>
+				</div>
+			</transition>
+
 			<div class="bridge-button-row">
 				<el-button
 						:disabled="!isAmountValid || isBalanceLoading"
@@ -91,8 +93,8 @@
 		</el-card>
 
 		<!-- bridge dialogs -->
-		<bridge-dialog-l1 ref="progressDialogL1" @finish="onFinish" />
-		<bridge-dialog-l2 ref="progressDialogL2" @finish="onFinish" />
+		<BridgeDialogL1 ref="progressDialogL1" @finish="onFinish" />
+		<BridgeDialogL2 ref="progressDialogL2" @finish="onFinish" />
 
 		<!--	history dialog	-->
 		<HistoryPage v-model="showHistory" />
@@ -100,7 +102,6 @@
 </template>
 
 <script setup>
-import { ethers } from "ethers";
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { Switch, Loading } from '@element-plus/icons-vue'
 import { useStore } from 'vuex';
@@ -115,35 +116,27 @@ import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
 import HistoryButton from '@/ui/components/HistoryButton.vue';
 import HistoryPage from '@/ui/views/HistoryPage.vue';
 
-// -----------------------------
-// Vuex & chain IDs
-// -----------------------------
 const store = useStore();
 const account = computed(() => store.state.account);
 const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
 const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
-// -----------------------------
-// Bridge state
-// -----------------------------
+// History state
+//  TODO
 const hasAction = ref(false);
 const showHistory = ref(false);
 
+// Bridge state
 const isL1ToL2 = ref(true); // true: L1->L2, false: L2->L1
 const amount = ref('');
 const selectedTokenSymbol = ref(TOKEN_LIST[0].symbol);
 const balance = ref('0.0000');
 const isBalanceLoading = ref(false);
 
-// -----------------------------
-// Bridge dialogs
-// -----------------------------
 const progressDialogL1 = ref(null);
 const progressDialogL2 = ref(null);
 
-// -----------------------------
 // Computed: network config
-// -----------------------------
 const fromNetworkConfig = computed(() => {
 	const chainId = isL1ToL2.value ? L1ChainId.value : L2ChainId.value;
 	return NETWORKS[chainId] || {};
@@ -153,9 +146,7 @@ const toNetworkConfig = computed(() => {
 	return NETWORKS[chainId] || {};
 });
 
-// -----------------------------
 // Computed: token contract
-// -----------------------------
 const currentTokenContract = computed(() => {
 	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value);
 	if (!token) return null;
@@ -164,19 +155,22 @@ const currentTokenContract = computed(() => {
 	return token.networks[chainId] || null;
 });
 
-// -----------------------------
 // Computed: button state
-// -----------------------------
 const isAmountValid = computed(() => {
 	const val = parseFloat(amount.value);
 	return val > 0 && val <= parseFloat(balance.value);
+});
+
+const isMigration = computed(() => {
+	return selectedTokenSymbol.value === 'QKC';
 });
 
 const buttonText = computed(() => {
 	const val = parseFloat(amount.value);
 	if (!amount.value || val === 0) return 'Enter Amount';
 	if (val > parseFloat(balance.value)) return 'Insufficient Balance';
-	return 'Transfer';
+	if (isMigration.value) return 'Start Migration';
+	return 'Bridge Assets';
 });
 
 // -----------------------------
@@ -250,9 +244,6 @@ function onFinish() {
 // -----------------------------
 watch([selectedTokenSymbol, isL1ToL2, account], fetchBalance, { immediate: true });
 
-// -----------------------------
-// Lifecycle: polling balance
-// -----------------------------
 let timer;
 onMounted(() => {
 	fetchBalance();
@@ -265,32 +256,22 @@ onBeforeUnmount(() => {
 
 
 <style scoped lang="less">
+@migration-blue: #5b5f97;
+@migration-hover: #4a4e87;
+@migration-bg: rgba(91, 95, 151, 0.03);
+@migration-border: rgba(91, 95, 151, 0.2);
+@migration-glow: rgba(91, 95, 151, 0.15);
+
 .bridge-container {
 	width: 700px;
-	margin: 50px auto 0;
+	margin: 45px auto 0;
 	padding: 30px;
 }
 
-.bridge-message {
-	font-style: normal;
-	font-weight: 500;
-	font-size: 18px;
-	line-height: 22px;
-	color: #181ea9;
-	text-align: left;
-	font-family: CoinbaseSans;
-}
-
 .bridge-header {
-	margin-top: 45px;
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-
-	.header-actions {
-		display: flex;
-		gap: 12px;
-	}
 }
 
 .bridge-card {
@@ -300,11 +281,13 @@ onBeforeUnmount(() => {
 	border-radius: 12px;
 	background: #fff;
 	box-shadow: 0 4px 16px rgba(24, 30, 169, 0.06);
+	transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 
 	.network-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 
 		.network-box {
 			flex: 1;
@@ -382,13 +365,13 @@ onBeforeUnmount(() => {
 		}
 	}
 
-
 	.amount-box {
 		margin-top: 22px;
 		border: 1px solid rgba(24, 30, 169, 0.1);
 		background: #FAFCFF;
 		padding: 20px;
 		border-radius: 12px;
+		transition: background 0.3s ease, border-color 0.3s ease;
 
 		.token-option {
 			display: flex;
@@ -436,6 +419,51 @@ onBeforeUnmount(() => {
 		}
 	}
 
+	.migration-alert-wrapper {
+		overflow: hidden;
+		display: block;
+	}
+	.migration-alert {
+		margin-top: 16px;
+		padding: 12px 16px;
+		border-radius: 12px;
+		background: rgba(245, 158, 11, 0.06);
+		border: 1px dashed rgba(245, 158, 11, 0.3);
+		display: flex;
+		align-items: flex-start;
+
+		.alert-content {
+			.alert-title {
+				font-size: 14px;
+				font-weight: 700;
+				color: #f59e0b;
+				margin-bottom: 4px;
+				display: flex;
+				align-items: center;
+			}
+
+			.alert-desc {
+				font-size: 13px;
+				color: #6b7280;
+				line-height: 1.5;
+			}
+		}
+	}
+	.migration-collapse-enter-active,
+	.migration-collapse-leave-active {
+		transition:
+				all 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+				max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+		max-height: 200px;
+	}
+	.migration-collapse-enter-from,
+	.migration-collapse-leave-to {
+		opacity: 0;
+		max-height: 0;
+		transform: scale(0.96) translateY(-10px);
+		margin-top: 0;
+	}
+
 	.bridge-button-row {
 		margin-top: 28px;
 		width: 100%;
@@ -472,13 +500,59 @@ onBeforeUnmount(() => {
 		}
 	}
 
+	&.is-migration-mode {
+		.network-box, .amount-box {
+			background: @migration-bg;
+			border-color: @migration-border;
+		}
+
+		.switch-btn {
+			background: @migration-blue;
+			border-color: @migration-blue;
+			color: white;
+			&:hover {
+				background: @migration-hover;
+				border-color: @migration-hover;
+				box-shadow: 0 4px 12px @migration-glow;
+			}
+		}
+
+		.amount-box .balance-row .max-btn {
+			background: @migration-blue;
+			border-color: @migration-blue;
+			color: white;
+			&:hover {
+				background: @migration-hover;
+				border-color: @migration-hover;
+				box-shadow: 0 4px 12px @migration-glow;
+			}
+		}
+
+		.bridge-button-row .bridge-submit-btn {
+			background: linear-gradient(135deg, @migration-blue, @migration-hover);
+			border: none;
+			&:hover:not(:disabled) {
+				background: linear-gradient(135deg, darken(@migration-hover, 5%), darken(@migration-hover, 10%));
+				box-shadow: 0 8px 20px @migration-glow;
+				transform: translateY(-2px);
+			}
+		}
+
+		.network-box:hover .text .value {
+			color: @migration-blue;
+		}
+
+		:deep(.token-select .el-select__wrapper:hover) {
+			border-color: @migration-blue !important;
+		}
+	}
+
 	:deep(.amount-input .el-input__wrapper) {
 		box-shadow: none !important;
 		background: transparent !important;
 		padding: 0 4px;
 		border: none;
 	}
-
 	:deep(.amount-input input) {
 		font-size: 28px;
 		font-weight: 600;
@@ -490,7 +564,6 @@ onBeforeUnmount(() => {
 		-webkit-appearance: none;
 		margin: 0;
 	}
-
 	:deep(.amount-input .el-input-group__append) {
 		background: transparent !important;
 		border: none !important;
@@ -507,7 +580,6 @@ onBeforeUnmount(() => {
 		align-items: center;
 		transition: border-color 0.3s ease;
 	}
-
 	:deep(.token-select .el-select__wrapper:hover) {
 		border-color: #181ea9 !important;
 	}

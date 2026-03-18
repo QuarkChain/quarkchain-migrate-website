@@ -6,15 +6,6 @@
 			</b-navbar-item>
 		</template>
 
-		<template #start>
-			<b-navbar-item tag="router-link" to="/migration">
-				<span class="nav-text">QKC Migration</span>
-			</b-navbar-item>
-			<b-navbar-item tag="router-link" to="/bridge">
-				<span class="nav-text">Bridge</span>
-			</b-navbar-item>
-		</template>
-
 		<template #end>
 			<b-navbar-item class="connection" tag="div">
 				<Wallet/>
@@ -33,34 +24,6 @@ import Wallet from "@/ui/components/Wallet.vue"
 	max-width: 1440px;
 	height: 70px;
 	background: transparent !important;
-
-	.navbar-item {
-		font-weight: 400;
-		font-size: 20px;
-		line-height: 27px;
-		font-family: CoinbaseSans;
-		background-color: transparent !important;
-	}
-	.navbar-item:hover,
-	.navbar-item:focus,
-	.navbar-item:active {
-		background-color: transparent !important;
-	}
-
-	.navbar-start .navbar-item {
-		transition: all 0.3s ease;
-	}
-	.navbar-start .navbar-item:hover {
-		background-color: transparent !important;
-		transform: translateY(-2px);
-		color: #181ea9;
-		font-weight: 500;
-	}
-
-	.router-link-exact-active {
-		color: #181ea9;
-		font-weight: 500;
-	}
 }
 
 .connection {
