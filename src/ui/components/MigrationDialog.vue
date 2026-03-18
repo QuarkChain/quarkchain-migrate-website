@@ -86,20 +86,18 @@ const isFinish = ref(false);
 const loading = ref(0);
 
 const amount = ref(0n);
-const balance = ref(0n);
 
 // methods
 function formatAmount(val) {
 	return ethers.parseEther(val.toString());
 }
 
-function show(amt, bal) {
+function show(amt) {
 	steps.value = 1;
 	isFinish.value = false;
 	loading.value = 0;
 
 	amount.value = amt;
-	balance.value = bal;
 
 	visible.value = true;
 	loadData();

@@ -12,3 +12,9 @@ export async function getErc20BalanceByL2(l2ChainId, tokenAddress, userAddress) 
 	const provider = getL2Provider(l2ChainId);
 	return getBalance(tokenAddress, provider, userAddress);
 }
+
+// QKC balance
+export async function getQKCBalanceByL2(l2ChainId, userAddress) {
+	const provider = getL2Provider(l2ChainId);
+	return provider.getBalance(userAddress);
+}

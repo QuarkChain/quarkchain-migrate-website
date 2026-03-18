@@ -73,8 +73,8 @@
 				<div v-if="isMigration" class="migration-alert-wrapper">
 					<div class="migration-alert">
 						<div class="alert-content">
-							<p class="alert-title">⚠️ Note: One-Way Migration</p>
-							<p class="alert-desc">ERC-20 QKC will be converted to L2 Native Token. This cannot be undone.</p>
+							<p class="alert-title">⚠️ Note: Confirm Migration</p>
+							<p class="alert-desc">ERC-20 QKC will be permanently converted to L2 Native QKC. This process is irreversible.</p>
 						</div>
 					</div>
 				</div>
@@ -95,6 +95,7 @@
 		<!-- bridge dialogs -->
 		<BridgeDialogL1 ref="progressDialogL1" @finish="onFinish" />
 		<BridgeDialogL2 ref="progressDialogL2" @finish="onFinish" />
+		<MigrationDialog ref="migrationDialog" @finish="onFinish" />
 
 		<!--	history dialog	-->
 		<HistoryPage v-model="showHistory" />
@@ -107,12 +108,13 @@ import { Switch, Loading } from '@element-plus/icons-vue'
 import { useStore } from 'vuex';
 import { TOKEN_LIST } from "@/config/tokens.js";
 import { NETWORKS } from "@/config/networks.js";
-import { getErc20BalanceByL1, getErc20BalanceByL2 } from "@/services/bridge/balanceService.js";
+import { getErc20BalanceByL1, getErc20BalanceByL2, getQKCBalanceByL2 } from "@/services/bridge/balanceService.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
 import { formatTokenAmount } from "@/infra/uitls/utils.js";
 
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
 import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
+import MigrationDialog from '@/ui/components/MigrationDialog.vue'
 import HistoryButton from '@/ui/components/HistoryButton.vue';
 import HistoryPage from '@/ui/views/HistoryPage.vue';
 
@@ -135,6 +137,7 @@ const isBalanceLoading = ref(false);
 
 const progressDialogL1 = ref(null);
 const progressDialogL2 = ref(null);
+const migrationDialog = ref(null);
 
 // Computed: network config
 const fromNetworkConfig = computed(() => {
@@ -190,7 +193,11 @@ async function fetchBalance() {
 		if (isL1ToL2.value) {
 			rawBalance = await getErc20BalanceByL1(L1ChainId.value, address, account.value);
 		} else {
-			rawBalance = await getErc20BalanceByL2(L2ChainId.value, address, account.value);
+			if (isMigration.value) {
+				rawBalance = await getQKCBalanceByL2(L2ChainId.value, account.value);
+			} else {
+				rawBalance = await getErc20BalanceByL2(L2ChainId.value, address, account.value);
+			}
 		}
 
 		balance.value = formatTokenAmount(rawBalance, decimals);
@@ -215,18 +222,21 @@ function handleBridge() {
 	const token = TOKEN_LIST.find(t => t.symbol === selectedTokenSymbol.value);
 	if (!token) return;
 
-	const payload = {
-		fromNetwork: fromNetworkConfig.value,
-		toNetwork: toNetworkConfig.value,
-		token,
-		amount: amount.value,
-		account: account.value,
-	};
-
-	if (isL1ToL2.value) {
-		progressDialogL1.value?.show(payload);
+	if (isMigration.value) {
+		migrationDialog.value?.show(amount.value);
 	} else {
-		progressDialogL2.value?.show(payload);
+		const payload = {
+			fromNetwork: fromNetworkConfig.value,
+			toNetwork: toNetworkConfig.value,
+			token,
+			amount: amount.value,
+			account: account.value,
+		};
+		if (isL1ToL2.value) {
+			progressDialogL1.value?.show(payload);
+		} else {
+			progressDialogL2.value?.show(payload);
+		}
 	}
 }
 
@@ -256,6 +266,9 @@ onBeforeUnmount(() => {
 
 
 <style scoped lang="less">
+@primary-blue: #181ea9;
+@primary-hover: #12168a;
+
 @migration-blue: #5b5f97;
 @migration-hover: #4a4e87;
 @migration-bg: rgba(91, 95, 151, 0.03);
@@ -277,9 +290,9 @@ onBeforeUnmount(() => {
 .bridge-card {
 	margin-top: 20px;
 	padding: 30px 25px;
-	border: 1px solid rgba(24, 30, 169, 0.15);
 	border-radius: 12px;
 	background: #fff;
+	border: 1px solid rgba(24, 30, 169, 0.15);
 	box-shadow: 0 4px 16px rgba(24, 30, 169, 0.06);
 	transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -287,7 +300,6 @@ onBeforeUnmount(() => {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 
 		.network-box {
 			flex: 1;
@@ -297,7 +309,6 @@ onBeforeUnmount(() => {
 			border-radius: 12px;
 			cursor: pointer;
 			display: flex;
-			flex-direction: row;
 			align-items: center;
 			transition: all 0.3s ease;
 
@@ -316,7 +327,7 @@ onBeforeUnmount(() => {
 
 				.label {
 					font-size: 14px;
-					color: #666666;
+					color: #666;
 					margin-bottom: 2px;
 				}
 				.value {
@@ -326,52 +337,49 @@ onBeforeUnmount(() => {
 					transition: color 0.3s ease;
 				}
 			}
-		}
-		.network-box:hover {
-			box-shadow: 0 2px 6px rgba(24, 30, 169, 0.1);
-			.text .value {
-				color: #181ea9;
+			&:hover {
+				box-shadow: 0 2px 6px rgba(24, 30, 169, 0.1);
+				.text .value {
+					color: @primary-blue;
+				}
 			}
-		}
-		.left {
-			justify-content: flex-start;
-		}
-		.right {
-			justify-content: flex-end;
-		}
-		.network-box.left .text {
-			margin-left: 15px;
-			align-items: flex-start;
-			text-align: left;
-		}
-		.network-box.right .text {
-			margin-right: 15px;
-			align-items: flex-end;
-			text-align: right;
+			&.left {
+				justify-content: flex-start;
+				.text {
+					margin-left: 15px;
+					align-items: flex-start;
+					text-align: left;
+				}
+			}
+			&.right {
+				justify-content: flex-end;
+				.text {
+					margin-right: 15px;
+					align-items: flex-end;
+					text-align: right;
+				}
+			}
 		}
 
 		.switch-btn {
 			margin: 0 12px;
-			background: #181ea9;
+			background: @primary-blue;
 			color: #fff;
-			border-color: #181ea9;
-			transition: all 0.3s ease;
-		}
-		.switch-btn:hover {
-			box-shadow: 0 3px 10px rgba(24, 30, 169, 0.25);
-			background: #12168a;
-			border-color: #12168a;
-			color: #fff;
+			border-color: @primary-blue;
+			&:hover {
+				background: @primary-hover;
+				border-color: @primary-hover;
+				box-shadow: 0 3px 10px rgba(24, 30, 169, 0.25);
+			}
 		}
 	}
 
 	.amount-box {
 		margin-top: 22px;
-		border: 1px solid rgba(24, 30, 169, 0.1);
-		background: #FAFCFF;
 		padding: 20px;
 		border-radius: 12px;
-		transition: background 0.3s ease, border-color 0.3s ease;
+		background: #FAFCFF;
+		border: 1px solid rgba(24, 30, 169, 0.1);
 
 		.token-option {
 			display: flex;
@@ -398,23 +406,21 @@ onBeforeUnmount(() => {
 
 			.balance-info {
 				font-size: 14px;
-				color: #666666;
+				color: #666;
 			}
 
 			.max-btn {
-				background: #181ea9;
+				background: @primary-blue;
+				color: #fff;
 				border: none;
 				border-radius: 24px;
 				padding: 6px 16px;
 				font-size: 13px;
 				font-weight: 600;
-				color: #fff;
-				transition: all 0.3s ease;
-			}
-			.max-btn:hover {
-				box-shadow: 0 3px 10px rgba(24, 30, 169, 0.25);
-				background: #12168a;
-				color: #fff;
+				&:hover {
+					background: @primary-hover;
+					box-shadow: 0 3px 10px rgba(24, 30, 169, 0.25);
+				}
 			}
 		}
 	}
@@ -429,39 +435,22 @@ onBeforeUnmount(() => {
 		border-radius: 12px;
 		background: rgba(245, 158, 11, 0.06);
 		border: 1px dashed rgba(245, 158, 11, 0.3);
-		display: flex;
-		align-items: flex-start;
 
-		.alert-content {
-			.alert-title {
-				font-size: 14px;
-				font-weight: 700;
-				color: #f59e0b;
-				margin-bottom: 4px;
-				display: flex;
-				align-items: center;
-			}
-
-			.alert-desc {
-				font-size: 13px;
-				color: #6b7280;
-				line-height: 1.5;
-			}
+		.alert-title {
+			font-size: 14px;
+			font-weight: 700;
+			color: #f59e0b;
+			margin-bottom: 4px;
+			display: flex;
+			align-items: center;
 		}
-	}
-	.migration-collapse-enter-active,
-	.migration-collapse-leave-active {
-		transition:
-				all 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-				max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-		max-height: 200px;
-	}
-	.migration-collapse-enter-from,
-	.migration-collapse-leave-to {
-		opacity: 0;
-		max-height: 0;
-		transform: scale(0.96) translateY(-10px);
-		margin-top: 0;
+
+		.alert-desc {
+			text-align: left;
+			font-size: 13px;
+			color: #6b7280;
+			line-height: 1.5;
+		}
 	}
 
 	.bridge-button-row {
@@ -471,31 +460,25 @@ onBeforeUnmount(() => {
 		.bridge-submit-btn {
 			width: 100%;
 			height: 54px;
-			background: #181ea9;
-			color: #fff;
 			border: none;
+			border-radius: 16px;
+			background: @primary-blue;
+			color: #fff;
 			font-size: 17px;
 			font-weight: 600;
-			border-radius: 16px;
 			transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-			letter-spacing: 0.5px;
 			font-family: CoinbaseSans, sans-serif;
 
 			&:hover:not(:disabled) {
-				background: #12168a;
+				background: @primary-hover;
 				transform: translateY(-2px);
 				box-shadow: 0 8px 20px rgba(24, 30, 169, 0.25);
-			}
-
-			&:active:not(:disabled) {
-				transform: translateY(0);
 			}
 
 			&:disabled {
 				background: #f0f2f7;
 				color: #94a3b8;
 				cursor: not-allowed;
-				border: 1px solid rgba(24, 30, 169, 0.05);
 			}
 		}
 	}
@@ -536,52 +519,43 @@ onBeforeUnmount(() => {
 				box-shadow: 0 8px 20px @migration-glow;
 				transform: translateY(-2px);
 			}
+			&:disabled {
+				background: #e2e4ed;
+				color: #a0a4b8;
+				opacity: 0.8;
+			}
 		}
-
 		.network-box:hover .text .value {
 			color: @migration-blue;
 		}
+	}
 
-		:deep(.token-select .el-select__wrapper:hover) {
-			border-color: @migration-blue !important;
+	:deep(.amount-input) {
+		.el-input__wrapper { box-shadow: none !important; background: transparent !important; border: none; padding: 0 4px; }
+		input { font-size: 28px; font-weight: 600; color: #1a1a1a; font-family: CoinbaseSansBlob; }
+		input[type="number"]::-webkit-outer-spin-button,
+		input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+		.el-input-group__append { background: transparent !important; border: none !important; box-shadow: none !important; }
+	}
+	:deep(.token-select) {
+		.el-select__wrapper {
+			background: #fff !important; border-radius: 20px !important; border: 1px solid rgba(24, 30, 169, 0.2) !important;
+			box-shadow: none !important; padding: 0 14px !important; min-height: 40px; display: flex; align-items: center; transition: border-color 0.3s ease;
 		}
+		.el-select__wrapper:hover { border-color: @primary-blue !important; }
 	}
 
-	:deep(.amount-input .el-input__wrapper) {
-		box-shadow: none !important;
-		background: transparent !important;
-		padding: 0 4px;
-		border: none;
+	&.is-migration-mode :deep(.token-select .el-select__wrapper:hover) {
+		border-color: @migration-blue !important;
 	}
-	:deep(.amount-input input) {
-		font-size: 28px;
-		font-weight: 600;
-		color: #1a1a1a;
-		font-family: CoinbaseSansBlob;
-	}
-	:deep(input[type="number"]::-webkit-outer-spin-button),
-	:deep(input[type="number"]::-webkit-inner-spin-button) {
-		-webkit-appearance: none;
-		margin: 0;
-	}
-	:deep(.amount-input .el-input-group__append) {
-		background: transparent !important;
-		border: none !important;
-		box-shadow: none !important;
-	}
-	:deep(.token-select .el-select__wrapper) {
-		background: #fff !important;
-		border-radius: 20px !important;
-		border: 1px solid rgba(24, 30, 169, 0.2) !important;
-		box-shadow: none !important;
-		padding: 0 14px !important;
-		min-height: 40px;
-		display: flex;
-		align-items: center;
-		transition: border-color 0.3s ease;
-	}
-	:deep(.token-select .el-select__wrapper:hover) {
-		border-color: #181ea9 !important;
-	}
+}
+
+/* --- anim --- */
+.migration-collapse-enter-active, .migration-collapse-leave-active {
+	transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+	max-height: 200px;
+}
+.migration-collapse-enter-from, .migration-collapse-leave-to {
+	opacity: 0; max-height: 0; transform: scale(0.96) translateY(-10px); margin-top: 0;
 }
 </style>
