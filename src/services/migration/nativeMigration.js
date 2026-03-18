@@ -45,13 +45,16 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function waitForL2Mint(l2ChainId, userAddress) {
+export async function waitForL2Mint(l2ChainId, userAddress, signal) {
     const provider = getL2Provider(l2ChainId);
     const user = userAddress.toLowerCase();
     let lastCheckedBlock = await provider.getBlockNumber() - 1;
 
     console.log(`Start watching L2 from block ${lastCheckedBlock}`);
     for (let retry = 0; retry < MAX_RETRY; retry++) {
+        if (signal?.aborted) {
+            throw new Error("Polling aborted");
+        }
         const latestBlock = await provider.getBlockNumber();
 
         for (let i = lastCheckedBlock + 1; i <= latestBlock; i++) {

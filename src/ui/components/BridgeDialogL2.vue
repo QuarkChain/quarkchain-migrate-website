@@ -26,7 +26,7 @@
 
 		<!-- Page 1: Review -->
 		<div v-if="currentPage === 1" class="page-container">
-			<h2 class="page-container-title">Review</h2>
+			<h2 class="page-container-title">Review Bridge</h2>
 
 			<BridgeItemCard
 					:title="`Bridge from ${safeFromNetwork.name}`"

@@ -73,8 +73,8 @@
 				<div v-if="isMigration" class="migration-alert-wrapper">
 					<div class="migration-alert">
 						<div class="alert-content">
-							<p class="alert-title">⚠️ Note: Confirm Migration</p>
-							<p class="alert-desc">ERC-20 QKC will be permanently converted to L2 Native QKC. This process is irreversible.</p>
+							<p class="alert-title">⚠️ Note: Confirm Migration to L2 Native</p>
+							<p class="alert-desc">You are migrating ERC-20 QKC to Native QKC on L2. This is a permanent protocol conversion and cannot be reversed.</p>
 						</div>
 					</div>
 				</div>
@@ -123,8 +123,8 @@ import HistoryPage from '@/ui/views/HistoryPage.vue';
 // --- Global State ---
 const store = useStore();
 const account = computed(() => store.state.account);
-const L1ChainId = computed(() => store.state.l1ChainId);
-const L2ChainId = computed(() => store.state.l2ChainId);
+const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
+const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
 // --- UI State ---
 const hasAction = ref(false);
@@ -213,7 +213,9 @@ function setMax() {
 function handleBridge() {
 	if (!isAmountValid.value) return;
 	if (isMigration.value) {
-		migrationDialog.value?.show(amount.value);
+		migrationDialog.value?.show({
+			amount: amount.value,
+		});
 	} else {
 		const payload = {
 			fromNetwork: fromNetworkConfig.value,

@@ -23,7 +23,7 @@
 		</div>
 
 		<div v-if="currentPage === 1" class="page-container">
-			<h2 class="page-container-title">Review</h2>
+			<h2 class="page-container-title">Review Bridge</h2>
 
 			<BridgeItemCard
 					:title="`Bridge from ${safeFromNetwork.name}`"
@@ -217,7 +217,7 @@
 import { ethers } from 'ethers';
 import { computed, watch, ref, reactive } from 'vue';
 import { useStore } from "vuex";
-import { Timer, Coin } from '@element-plus/icons-vue'
+import { Timer, Coin } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import { usePolling } from "@/ui/composables/usePolling.js";
