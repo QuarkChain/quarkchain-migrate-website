@@ -16,3 +16,11 @@ export const BRIDGE_DIRECTION = {
 	L1_TO_L2: "L1→L2",
 	L2_TO_L1: "L2→L1"
 }
+
+export const STATUS = {
+	IDLE: 'idle',
+	LOADING: 'loading',
+	SUCCESS: 'success',
+	DISABLED: 'disabled',
+	FAILED: 'failed',
+}

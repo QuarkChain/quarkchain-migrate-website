@@ -121,7 +121,7 @@
 							<el-button
 									v-if="steps[1] === STATUS.IDLE"
 									class="right-btn"
-									@click="clickApprove"
+									@click="handleApprove"
 							>
 								Approve
 							</el-button>
@@ -157,7 +157,7 @@
 									v-if="steps[2] === STATUS.IDLE || steps[2] === STATUS.DISABLED"
 									class="right-btn"
 									:disabled="steps[2] === STATUS.DISABLED"
-									@click="clickMigration"
+									@click="handleMigration"
 							>
 								Migration
 							</el-button>
@@ -221,31 +221,43 @@
 </template>
 
 <script setup>
-import {computed, reactive, ref, watch} from 'vue';
+import { computed, reactive, ref, watch, onUnmounted } from 'vue';
 import { useStore } from "vuex";
 import { ElMessage } from 'element-plus';
 import { Timer, Coin } from '@element-plus/icons-vue';
 import { ethers } from 'ethers';
 import { NETWORKS } from "@/config/networks.js";
-import { approveErc20, convert, getL1Erc20Allowance, waitForL2Mint } from '@/services/migration/nativeMigration.js';
 import { usePolling } from "@/ui/composables/usePolling.js";
 import { getGasPrice } from "@/services/bridge/l1ToL2.js";
-import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
+import { BRIDGE_DIRECTION, BRIDGE_STATUS, STATUS } from "@/config/constant.js";
 import { saveTransactions } from "@/services/history/db.js";
+import {
+	approveErc20,
+	convert,
+	getL1Erc20Allowance,
+	waitForL2Mint
+} from '@/services/migration/nativeMigration.js';
 
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import quarkIcon from '@/assets/quarkchain.svg'
 
+// --- Constants & Config ---
+const APPROVE_GAS_LIMIT = 80000n;
+const DEPOSIT_GAS_LIMIT = 1500000n;
+
 const emit = defineEmits(['finish']);
 
-const store = useStore()
-const account = computed(() => store.state.account)
-const Conversion = computed(() => store.getters.Conversion);
-const OldToken = computed(() => store.getters.OldToken);
-const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
-const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
-const fromNetwork = computed(() => NETWORKS[L1ChainId.value]);
-const toNetwork = computed(() => NETWORKS[L2ChainId.value]);
+// --- Store & Computed ---
+const store = useStore();
+const account = computed(() => store.state.account);
+const config = computed(() => ({
+	conversion: store.getters.Conversion,
+	oldToken: store.getters.OldToken,
+	l1Id: store.state.l1ChainId.toLowerCase(),
+	l2Id: store.state.l2ChainId.toLowerCase()
+}));
+const fromNetwork = computed(() => NETWORKS[config.value.l1Id]);
+const toNetwork = computed(() => NETWORKS[config.value.l2Id]);
 
 // global state
 const visible = ref(false);
@@ -257,14 +269,6 @@ const hasStateChanged = ref(false);
 // state
 const hasConfirmed = ref(false);
 
-// page 2
-const STATUS = {
-	IDLE: 'idle',
-	LOADING: 'loading',
-	SUCCESS: 'success',
-	DISABLED: 'disabled',
-	FAILED: 'failed',
-}
 const createInitialSteps = () => ({
 	1: STATUS.IDLE,
 	2: STATUS.DISABLED,
@@ -273,15 +277,12 @@ const createInitialSteps = () => ({
 })
 const steps = reactive(createInitialSteps())
 
-const approveGasLimit = 80000n;
-const depositGasLimit = 1500000n;
 const gas1ETH = ref('');
 const gas2ETH = ref('');
 const gasLoaded = ref(false);
 
-const loading = ref(0);
 const amount = ref(0);
-let controller = null;
+let mintController = null;
 
 const gasPollingEnabled = computed(() => visible.value && !isHistoryMode.value && steps[2] !== STATUS.SUCCESS);
 usePolling(loadGasCost, 30000, gasPollingEnabled);
@@ -292,18 +293,11 @@ function formatAmount(val) {
 }
 
 function abortPending() {
-	if (controller) {
-		controller.abort();
-		controller = null;
-	}
+	mintController?.abort();
+	mintController = null;
 }
 
-function show({
-	amount: am,
-	mode: md,
-	txHash,
-	status
-}) {
+function show({ amount: am, mode: md = 'new', txHash, status }) {
 	// if dialog already open, prevent stale requests
 	abortPending();
 
@@ -318,51 +312,52 @@ function show({
 	if (isHistoryMode.value) {
 		// history mode: no approval/start actions; show progress/result only
 		currentPage.value = 2;
-		steps[1] = STATUS.SUCCESS; // hidden anyway
-		steps[2] = STATUS.SUCCESS; // deposit already executed
-		const normalizedStatus = String(status || '');
-		if (normalizedStatus === BRIDGE_STATUS.COMPLETED) {
+		steps[1] = STATUS.SUCCESS;
+		steps[2] = STATUS.SUCCESS;
+		if (status === BRIDGE_STATUS.COMPLETED) {
 			steps[3] = STATUS.SUCCESS;
 			steps[4] = STATUS.SUCCESS;
 			return;
 		}
 
 		steps[3] = STATUS.IDLE;
-		if (txHash) {
-			l2Mint(txHash);
-		}
+		if (txHash) handleL2Minting(txHash);
 	} else {
 		loadData();
 	}
 }
 
 async function loadData() {
-	const allowance = await getL1Erc20Allowance(L1ChainId.value, OldToken.value, account.value, Conversion.value);
-	if (allowance >= formatAmount(amount.value)) {
-		steps[1] = STATUS.SUCCESS
-		steps[2] = STATUS.IDLE
+	try {
+		const allowance = await getL1Erc20Allowance(
+				config.value.l1Id,
+				config.value.oldToken,
+				account.value,
+				config.value.conversion
+		);
+		if (allowance >= formatAmount(amount.value)) {
+			steps[1] = STATUS.SUCCESS
+			steps[2] = STATUS.IDLE
+		}
+		await loadGasCost();
+	} catch (e) {
+		console.error("Init migration failed", e);
 	}
-	await loadGasCost();
 }
 
 async function loadGasCost() {
-	if(steps[2] === STATUS.SUCCESS) {
-		return;
-	}
+	if (steps[2] === STATUS.SUCCESS) return;
 
 	gasLoaded.value = false;
 	try {
-		const gasPrice = await getGasPrice(L1ChainId.value);
-		const totalWei1 = gasPrice * BigInt(approveGasLimit);
-		const totalWei2 = gasPrice * BigInt(depositGasLimit);
-		const ethString1 = ethers.formatEther(totalWei1);
-		const ethString2 = ethers.formatEther(totalWei2);
-		const formatEth = (val) => {
-			return Number(val).toFixed(8).replace(/\.?0+$/, '');
+		const price = await getGasPrice(config.value.l1Id);
+		const format = (limit) => {
+			const eth = ethers.formatEther(price * limit);
+			return Number(eth).toFixed(8).replace(/\.?0+$/, '');
 		};
 
-		gas1ETH.value = formatEth(ethString1);
-		gas2ETH.value = formatEth(ethString2);
+		gas1ETH.value = format(APPROVE_GAS_LIMIT);
+		gas2ETH.value = format(DEPOSIT_GAS_LIMIT);
 		gasLoaded.value = true;
 	} catch (e) {
 		if (gas1ETH.value) {
@@ -371,115 +366,102 @@ async function loadGasCost() {
 	}
 }
 
-async function clickApprove() {
-	if (steps[1] !== STATUS.IDLE) return
+// --- Action Handlers ---
+async function handleApprove() {
+	if (steps[1] !== STATUS.IDLE) return;
 
-	steps[1] = STATUS.LOADING
+	steps[1] = STATUS.LOADING;
 	try {
-		await approveErc20(L1ChainId.value, OldToken.value, Conversion.value, amount.value);
-		const allowance = await getL1Erc20Allowance(L1ChainId.value, OldToken.value, account.value, Conversion.value);
-		if (allowance >= formatAmount(amount.value)) {
-			steps[1] = STATUS.SUCCESS;
-			steps[2] = STATUS.IDLE;
-			ElMessage.success("Approved successfully.");
-		} else {
-			steps[1] = STATUS.IDLE;
-			ElMessage.error("Approved amount < migration amount.");
-		}
+		await approveErc20(config.value.l1Id, config.value.oldToken, config.value.conversion, amount.value);
+		steps[1] = STATUS.SUCCESS;
+		steps[2] = STATUS.IDLE;
+		ElMessage.success("Approved successfully.");
 	} catch (e) {
 		steps[1] = STATUS.IDLE;
 		ElMessage.error("Approve failed.");
 	}
 }
 
-async function clickMigration() {
-	if (steps[2] !== STATUS.IDLE) return
+async function handleMigration() {
+	if (steps[2] !== STATUS.IDLE) return;
 
-	steps[2] = STATUS.LOADING
+	steps[2] = STATUS.LOADING;
 	try {
-		const tx = await convert(L1ChainId.value, Conversion.value, amount.value);
+		const tx = await convert(config.value.l1Id, config.value.conversion, amount.value);
 		const receipt = await tx.wait();
 		if (receipt?.status === 1) {
-			steps[2] = STATUS.SUCCESS
+			steps[2] = STATUS.SUCCESS;
 			steps[3] = STATUS.IDLE;
 			ElMessage.success("Transaction confirmed on L1.");
 
-			const currentTimestamp = Math.floor(Date.now() / 1000);
-			const value = formatAmount(amount.value.toString());
 			await saveTransactions({
 				id: receipt.hash,
 				address: account.value,
 				direction: BRIDGE_DIRECTION.L1_TO_L2,
 				hash: receipt.hash,
-				msgHash: null,
-				token: OldToken.value,
+				token: config.value.oldToken,
 				from: account.value,
-				to: Conversion.value,
-				amount: value.toString(),
-				timestamp: currentTimestamp,
+				to: config.value.conversion,
+				amount: ethers.parseEther(amount.value.toString()).toString(),
+				timestamp: Math.floor(Date.now() / 1000),
 				blockNumber: receipt.blockNumber,
 				status: BRIDGE_STATUS.UNKNOWN,
-				remaining: 5 * 60
+				remaining: 3 * 60
 			});
 			hasStateChanged.value = true;
 
-			l2Mint(receipt.hash);
+			handleL2Minting(receipt.hash);
 		} else {
 			steps[2] = STATUS.IDLE;
 			ElMessage.error("Transaction reverted");
 		}
 	} catch (e) {
-		console.log(e);
 		steps[2] = STATUS.IDLE;
 		ElMessage.error("Migration failed.");
 	}
 }
 
-async function l2Mint(txHash) {
+async function handleL2Minting(txHash) {
 	if (steps[3] === STATUS.LOADING) return;
 
 	abortPending();
-	controller = new AbortController();
+	mintController = new AbortController();
 
 	steps[3] = STATUS.LOADING;
 	try {
-		await waitForL2Mint(L2ChainId.value, account.value, controller.signal);
+		await waitForL2Mint(config.value.l2Id, account.value, mintController.signal);
 		steps[3] = STATUS.SUCCESS;
 		steps[4] = STATUS.SUCCESS;
 		await saveTransactions({
 			id: txHash,
-			remaining: 0,
-			status: BRIDGE_STATUS.COMPLETED
+			status: BRIDGE_STATUS.COMPLETED,
+			remaining: 0
 		});
 
 		ElMessage.success("L2 mint completed.");
 		hasStateChanged.value = true;
 	} catch (e) {
-		const isCancel =
-				e?.name === 'AbortError' ||
-				e?.message?.toLowerCase().includes('abort') ||
-				e?.message?.toLowerCase().includes('canceled') ||
-				controller?.signal?.aborted;
-		if (isCancel) {
-			return;
-		}
+		if (mintController?.signal.aborted) return;
 
-		steps[3] = STATUS.DISABLED;
-		ElMessage.error("Unexpected error occurred.");
+		steps[3] = STATUS.IDLE;
+		ElMessage.error("L2 synchronization timeout or error.");
 	}
 }
 
-watch(visible, (val) => {
-	if (!val) {
+// --- Watchers & Lifecycle ---
+watch(visible, (isOpen) => {
+	if (!isOpen) {
 		abortPending();
-	}
-	if (!val && hasStateChanged.value) {
-		hasStateChanged.value = false;
-		emit('finish');
+		if (hasStateChanged.value) {
+			hasStateChanged.value = false;
+			emit('finish');
+		}
 	}
 });
 
-defineExpose({show})
+onUnmounted(abortPending);
+
+defineExpose({ show });
 </script>
 
 <style scoped lang="less">
