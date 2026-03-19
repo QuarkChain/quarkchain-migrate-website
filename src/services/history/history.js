@@ -3,7 +3,6 @@ import { ethers } from "ethers";
 import { loadProgress, saveTransactions, updateProgress } from "./db.js";
 import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
-import { syncPendingStatus } from "@/services/history/bridgeStatus.js";
 
 const BRIDGE_DEPLOY_BLOCK = {
 	'0x1': 23874421,      // Ethereum mainnet
@@ -13,27 +12,36 @@ const BRIDGE_DEPLOY_BLOCK = {
 }
 
 const API_CONFIG = {
-	'0x1': 'https://api.etherscan.io/v2/api',
-	'0xaa36a7': 'https://api.etherscan.io/v2/api',
+	'0x1': 'https://eth.blockscout.com/api',
+	'0xaa36a7': 'https://eth-sepolia.blockscout.com/api',
 	'0x186ab': 'https://explorer.mainnet.l2.quarkchain.io/api',
 	'0x1adbb': 'https://explorer.delta.testnet.l2.quarkchain.io/api'
 };
 
-const EVENT_TOPIC = ethers.id("ERC20BridgeInitiated(address,address,address,address,uint256,bytes)");
-const iface = new ethers.Interface([
-	"event ERC20BridgeInitiated(address indexed localToken,address indexed remoteToken,address indexed from,address to,uint256 amount,bytes extraData)"
-]);
+const TOPICS = {
+	BRIDGE: ethers.id("ERC20BridgeInitiated(address,address,address,address,uint256,bytes)"),
+	CONVERT: ethers.id("TransactionDeposited(address,address,uint256,bytes)")
+};
 
-const L1_WINDOW = 5000;
-const L2_WINDOW = 50000;
-const API_THRESHOLD_L1 = 50000;
-const API_THRESHOLD_L2 = 10000;
-const MAX_API_STEP = 800000;
+const IFACES = {
+	BRIDGE: new ethers.Interface(["event ERC20BridgeInitiated(address indexed localToken,address indexed remoteToken,address indexed from,address to,uint256 amount,bytes extraData)"]),
+	CONVERT: new ethers.Interface(["event TransactionDeposited(address indexed from, address indexed to, uint256 indexed version, bytes opaqueData)"])
+};
 
-function hasL1ApiSupport(chainId) {
-	if (chainId !== '0x1' && chainId !== '0xaa36a7') return true;
-	return Boolean(import.meta.env.VITE_ETHERSCAN_KEY);
-}
+const PARSERS = {
+	BRIDGE: (parsed) => ({
+		type: 'BRIDGE',
+		token: parsed.args.localToken,
+		amount: parsed.args.amount.toString(),
+	}),
+	CONVERT: (parsed) => {
+		const amount = parseAmountFromOpaqueData(parsed.args.opaqueData);
+		return {
+			type: 'CONVERT',
+			amount: amount,
+		};
+	}
+};
 
 function throwIfAborted(signal) {
 	if (signal?.aborted) {
@@ -43,75 +51,76 @@ function throwIfAborted(signal) {
 	}
 }
 
-async function parseLogs(logs, provider, direction, address) {
-	const txs = [];
-	const blockCache = new Map();
+function parseAmountFromOpaqueData(opaqueData) {
+	try {
+		const normalizedData = opaqueData.startsWith('0x') ? opaqueData : `0x${opaqueData}`;
+		if (!normalizedData || normalizedData === '0x' || normalizedData.length < 66) {
+			return "0";
+		}
 
-	const blockNumbers = [...new Set(logs.map(l => l.blockNumber))];
-	const limit = pLimit(5);
-	await Promise.all(
-			blockNumbers.map(bn =>
-					limit(async () => {
-						const block = await provider.getBlock(bn);
-						blockCache.set(bn, block.timestamp);
-					})
-			)
-	);
+		const amountHex = normalizedData.substring(0, 66);
+		return BigInt(amountHex).toString();
+	} catch (error) {
+		return "0";
+	}
+}
 
-	for (const log of logs) {
-		const timestamp = blockCache.get(log.blockNumber);
-		const parsed = iface.parseLog(log);
-		txs.push({
-			id: log.transactionHash,
-			address,
-			direction,
-			hash: log.transactionHash,
-			msgHash: null,
-			token: parsed.args.localToken,
-			from: parsed.args.from,
-			to: parsed.args.to,
-			amount: parsed.args.amount.toString(),
-			timestamp: timestamp,
-			blockNumber: log.blockNumber,
-			status: BRIDGE_STATUS.UNKNOWN,
-			remaining: 0
+async function processLogs(logs, provider, type, userAddress, direction) {
+	const blocksToFetch = [];
+	const parsedLogs = logs.map(log => {
+		try {
+			const parsed = IFACES[type].parseLog({ data: log.data, topics: log.topics });
+			const data = PARSERS[type](parsed);
+
+			const bn = typeof log.blockNumber === 'string' ? parseInt(log.blockNumber, 16) : log.blockNumber;
+			let ts = null;
+			if (log.timeStamp) {
+				ts = log.timeStamp.startsWith('0x') ? parseInt(log.timeStamp, 16) : parseInt(log.timeStamp);
+			} else {
+				blocksToFetch.push(bn);
+			}
+
+			return { ...data, hash: log.transactionHash, blockNumber: bn, timestamp: ts };
+		} catch (e) { return null; }
+	}).filter(l => l !== null);
+
+	if (blocksToFetch.length > 0) {
+		const blockCache = new Map();
+		const uniqueBlocks = [...new Set(blocksToFetch)];
+		const limit = pLimit(10);
+		await Promise.all(uniqueBlocks.map(bn => limit(async () => {
+			const block = await provider.getBlock(bn);
+			blockCache.set(bn, block?.timestamp || 0);
+		})));
+
+		parsedLogs.forEach(tx => {
+			if (tx.timestamp === null) tx.timestamp = blockCache.get(tx.blockNumber);
 		});
 	}
-	return txs;
+
+	return parsedLogs.map(tx => ({
+		...tx,
+		id: tx.hash,
+		address: userAddress,
+		direction,
+		status: BRIDGE_STATUS.UNKNOWN
+	}));
 }
 
-async function scanLogs(provider, bridgeAddress, userAddress, fromBlock, toBlock) {
-	return await provider.getLogs({
-		address: bridgeAddress,
-		fromBlock,
-		toBlock,
-		topics: [
-			EVENT_TOPIC,
-			null,
-			null,
-			ethers.zeroPadValue(userAddress, 32)
-		]
+async function fetchLogsWithAPIOnce(apiUrl, chainId, { address, topic0, topic1, topic2, topic3, fromBlock, toBlock }) {
+	const params = new URLSearchParams({
+		module: 'logs',
+		action: 'getLogs',
+		address,
+		fromBlock: fromBlock.toString(),
+		toBlock: toBlock.toString(),
+		topic0
 	});
-}
-
-async function fetchLogsWithAPIOnce(apiUrl, chainId, { address, topic0, topic3, fromBlock, toBlock }) {
-	const params = new URLSearchParams();
-	if (chainId === '0x1' || chainId === '0xaa36a7') {
-		params.append('chainid', parseInt(chainId, 16).toString());
-		params.append('apikey', import.meta.env.VITE_ETHERSCAN_KEY);
-	}
-	params.append('module', 'logs');
-	params.append('action', 'getLogs');
-	params.append('address', address);
-	params.append('fromBlock', fromBlock.toString());
-	params.append('toBlock', toBlock.toString());
-	params.append('topic0', topic0);
-	params.append('topic0_3_opr', 'and');
-	params.append('topic3', topic3);
+	if (topic1) { params.append('topic1', topic1); params.append('topic0_1_opr', 'and'); }
+	if (topic2) { params.append('topic2', topic2); params.append('topic0_2_opr', 'and'); }
+	if (topic3) { params.append('topic3', topic3); params.append('topic0_3_opr', 'and'); }
 
 	const response = await fetch(`${apiUrl}?${params}`);
-	if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-
 	const data = await response.json();
 	if (data.status === "0") {
 		if (data.message === "No logs found" || data.result === null) return [];
@@ -121,138 +130,90 @@ async function fetchLogsWithAPIOnce(apiUrl, chainId, { address, topic0, topic3, 
 	return Array.isArray(data.result) ? data.result : [];
 }
 
-async function fetchLogsWithAPI(apiUrl, chainId, account, direction, { address, topic0, topic3, fromBlock, toBlock }, opts = {}) {
-	const {
-		resultLimitHint = 1000,
-		minSplitSpan = 1
-	} = opts;
-
-	const rawToTx = (log) => {
-		try {
-			const parsed = iface.parseLog({
-				data: log.data,
-				topics: log.topics
-			});
-			return {
-				id: log.transactionHash,
-				address: account,
-				direction: direction,
-				hash: log.transactionHash,
-				msgHash: null,
-
-				token: parsed.args.localToken,
-				from: parsed.args.from,
-				to: parsed.args.to,
-				amount: parsed.args.amount.toString(),
-				timestamp: parseInt(log.timeStamp, 16),
-				blockNumber: parseInt(log.blockNumber, 16),
-				status: BRIDGE_STATUS.UNKNOWN,
-				remaining: 0
-			};
-		} catch (e) {
-			return null;
-		}
-	};
-
-	async function fetchRangeAdaptive(a, b) {
-		const logs = await fetchLogsWithAPIOnce(apiUrl, chainId, { address, topic0, topic3, fromBlock: a, toBlock: b });
-		if (logs.length === 0) return [];
-
-		if (logs.length >= resultLimitHint && (b - a) > minSplitSpan) {
-			const mid = Math.floor((a + b) / 2);
-			const left = await fetchRangeAdaptive(a, mid);
-			const right = await fetchRangeAdaptive(mid + 1, b);
-			return [...left, ...right];
-		}
-
-		if (logs.length >= resultLimitHint && (b - a) <= minSplitSpan) {
-			const err = new Error("API log window hit result limit; fallback to RPC for completeness");
-			err.name = "ApiWindowLimitError";
-			throw err;
-		}
-
-		return logs;
-	}
-
-	const allLogs = await fetchRangeAdaptive(fromBlock, toBlock);
-	return allLogs.map(rawToTx).filter(tx => tx !== null);
-}
-
-async function syncLayer(layer, chainId, bridgeAddress, userAddress, opts = {}) {
+async function syncContractLogs({ layer, chainId, contractAddress, userAddress, type, opts }) {
 	const { signal, onChunk } = opts;
 	const isL1 = layer === "L1";
 	const direction = isL1 ? BRIDGE_DIRECTION.L1_TO_L2 : BRIDGE_DIRECTION.L2_TO_L1;
-
-	const progress = await loadProgress(userAddress, layer);
 	const provider = isL1 ? getL1Provider(chainId) : getL2Provider(chainId);
-
-	const deployBlock = BRIDGE_DEPLOY_BLOCK[chainId];
-	let latest = await provider.getBlockNumber();
-	latest = latest - (isL1 ? 1 : 6);
-	let from = Math.max(progress.lastBlock + 1, deployBlock);
-	if (latest <= from) return;
-
 	const apiUrl = API_CONFIG[chainId];
-	const blockDiff = latest - from;
-	const threshold = isL1 ? API_THRESHOLD_L1 : API_THRESHOLD_L2;
-	const canUseApi = apiUrl && blockDiff > threshold && hasL1ApiSupport(chainId);
 
-	// api scan
-	if (canUseApi) {
+	const progressKey = `${layer}_${type}_${contractAddress.slice(0, 8)}`;
+	const progress = await loadProgress(userAddress, progressKey);
+
+	let current = Math.max(progress.lastBlock + 1, BRIDGE_DEPLOY_BLOCK[chainId] || 0);
+	let latest = (await provider.getBlockNumber()) - (isL1 ? 1 : 6);
+
+	const topic0 = TOPICS[type];
+	const userTopic = ethers.zeroPadValue(userAddress, 32);
+
+	const apiParams = { address: contractAddress, topic0 };
+	const rpcTopics = [topic0, null, null, null];
+	if (type === 'BRIDGE') {
+		// BRIDGE: from  -> topic3
+		apiParams.topic3 = userTopic;
+		rpcTopics[3] = userTopic;
+	} else if (type === 'CONVERT') {
+		// CONVERT: to -> topic2
+		apiParams.topic2 = userTopic;
+		rpcTopics[2] = userTopic;
+	}
+
+	// --- Use Api ---
+	if (apiUrl) {
 		try {
-			let currentFrom = from;
-			while (currentFrom <= latest) {
+			while (current <= latest) {
 				throwIfAborted(signal);
+				const to = Math.min(current + 800000, latest);
 
-				const currentTo = Math.min(currentFrom + MAX_API_STEP, latest);
-				const txs = await fetchLogsWithAPI(apiUrl, chainId, userAddress, direction, {
-					address: bridgeAddress,
-					topic0: EVENT_TOPIC,
-					topic3: ethers.zeroPadValue(userAddress, 32),
-					fromBlock: currentFrom,
-					toBlock: currentTo
+				const rawLogs = await fetchLogsWithAPIOnce(apiUrl, chainId,{
+					...apiParams, fromBlock: current, toBlock: to
 				});
+				if (rawLogs.length > 0) {
+					const txs = await processLogs(rawLogs, provider, type, userAddress, direction);
+					if (txs.length > 0) await saveTransactions(txs);
+				}
 
-				if (txs.length > 0) {
-					await saveTransactions(txs);
-				}
-				await updateProgress(userAddress, layer, currentTo);
-				if (onChunk) {
-					await onChunk({ layer, fromBlock: currentFrom, toBlock: currentTo, added: txs.length });
-				}
-				currentFrom = currentTo + 1;
+				await updateProgress(userAddress, progressKey, to);
+				if (onChunk) onChunk({ type, method: 'API', from: current, to });
+				current = to + 1;
 			}
 			return;
-		} catch (err) {
-			console.warn(`[${layer}] API load error`, err.message);
-			const freshProgress = await loadProgress(userAddress, layer);
-			from = Math.max(freshProgress.lastBlock + 1, deployBlock);
+		} catch (e) {
+			console.warn(`[${type}] API error: ${e.message}. Falling back to RPC...`);
 		}
 	}
 
-	// RPC scan
-	const windowSize = isL1 ? L1_WINDOW : L2_WINDOW;
-	while (from <= latest) {
-		throwIfAborted(signal);
-		const to = Math.min(from + windowSize, latest);
-		const logs = await scanLogs(provider, bridgeAddress, userAddress, from, to);
+	// --- Use RPC ---
+	const RPC_WINDOW = isL1 ? 5000 : 50000;
+	while (current <= latest) {
 		throwIfAborted(signal);
 
-		if (logs.length > 0) {
-			const txs = await parseLogs(logs, provider, isL1 ? BRIDGE_DIRECTION.L1_TO_L2 : BRIDGE_DIRECTION.L2_TO_L1, userAddress);
-			await saveTransactions(txs);
+		const to = Math.min(current + RPC_WINDOW, latest);
+
+		const rawLogs = await provider.getLogs({
+			address: contractAddress,
+			fromBlock: current,
+			toBlock: to,
+			topics: rpcTopics
+		});
+		if (rawLogs.length > 0) {
+			const txs = await processLogs(rawLogs, provider, type, userAddress, direction);
+			if (txs.length > 0) await saveTransactions(txs);
 		}
 
-		await updateProgress(userAddress, layer, to);
-		if (onChunk) await onChunk({ layer, fromBlock: from, toBlock: to, added: logs.length });
-		from = to + 1;
+		await updateProgress(userAddress, progressKey, to);
+		current = to + 1;
 	}
 }
 
-export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, multicall, account, opts = {}) {
+export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, conversion, account, opts = {}) {
+	const { L1StandardBridge, L2StandardBridge } = bridge;
 	await Promise.all([
-		syncLayer("L1", l1ChainId, bridge.L1StandardBridge, account, opts),
-		syncLayer("L2", l2ChainId, bridge.L2StandardBridge, account, opts)
+		// 1. L1
+		syncContractLogs({ layer: "L1", chainId: l1ChainId, contractAddress: L1StandardBridge, userAddress: account, type: 'BRIDGE', opts }),
+		// 2. L2
+		syncContractLogs({ layer: "L2", chainId: l2ChainId, contractAddress: L2StandardBridge, userAddress: account, type: 'BRIDGE', opts }),
+		// 3. Conversion
+		syncContractLogs({ layer: "L1", chainId: l1ChainId, contractAddress: conversion, userAddress: account, type: 'CONVERT', opts })
 	]);
-	await syncPendingStatus(l1ChainId, l2ChainId, bridge, multicall, account, opts);
 }

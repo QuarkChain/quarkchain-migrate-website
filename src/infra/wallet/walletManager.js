@@ -18,9 +18,6 @@ export function initWalletEvents() {
     });
     window.ethereum.on("chainChanged", async (chainId) => {
         await store.dispatch('setChainId', chainId)
-
-        const account = store.state.account;
-        if (account) startSync(account);
     });
 }
 

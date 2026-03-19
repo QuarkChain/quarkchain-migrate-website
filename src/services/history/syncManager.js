@@ -4,30 +4,27 @@ import store from "@/app/store/index.js";
 import { syncing, txList } from "@/app/store/txStore.js";
 import { syncUserTransactions } from "@/services/history/history.js";
 import { loadTransactions } from "@/services/history/db.js";
+import {syncPendingStatus} from "@/services/history/bridgeStatus.js";
 
-const POLL_INTERVAL = 180000;
+const STATUS_POLL_INTERVAL = 30000;
 
-let timer = null;
-let sessionId = 0;
-let controller = null;
-let lastRefreshAt = 0;
+let statusTimer = null;
+let currentSession = 0;
+let abortController = null;
 
-function isActive(account, mySession, signal) {
-	if (sessionId !== mySession) return false;
-	if (signal?.aborted) return false;
-	if (store.state.account !== account) return false;
-	return true;
+function isContextValid(account, session) {
+	return currentSession === session && store.state.account === account;
 }
 
 export function stopSync() {
-	sessionId += 1;
-	if (controller) {
-		controller.abort();
-		controller = null;
+	currentSession += 1;
+	if (abortController) {
+		abortController.abort();
+		abortController = null;
 	}
-	if (timer) {
-		clearTimeout(timer);
-		timer = null;
+	if (statusTimer) {
+		clearTimeout(statusTimer);
+		statusTimer = null;
 	}
 	syncing.value = false;
 }
@@ -36,77 +33,70 @@ export async function startSync(account) {
 	stopSync();
 	if (!account) return;
 
-	const mySession = sessionId;
-	controller = new AbortController();
-	const signal = controller.signal;
+	const mySession = currentSession;
+	abortController = new AbortController();
+	const signal = abortController.signal;
 
-	// Initial list load can race with a fast account switch; guard it.
 	try {
-		const list = await loadTransactions(account);
-		if (!isActive(account, mySession, signal)) return;
-		txList.value = list;
+		txList.value = await loadTransactions(account);
+		await performOneTimeScan(account, mySession, signal);
+		runStatusPolling(account, mySession, signal);
 	} catch (err) {
-		console.error("load tx error", err);
+		if (err.name !== 'AbortError') console.error("Sync initialization failed", err);
 	}
-
-	runPoll(account, mySession, signal);
 }
 
-async function refreshListThrottled(account, mySession, minIntervalMs = 2500) {
-	const now = Date.now();
-	if (now - lastRefreshAt < minIntervalMs) return;
-	lastRefreshAt = now;
-
-	const list = await loadTransactions(account);
-	if (!isActive(account, mySession, controller?.signal)) return;
-	txList.value = list;
-}
-
-async function runPoll(account, mySession, signal) {
-	if (!isActive(account, mySession, signal)) return;
+async function performOneTimeScan(account, session, signal) {
+	if (!isContextValid(account, session)) return;
 
 	syncing.value = true;
+	try {
+		await syncUserTransactions(
+				store.state.l1ChainId,
+				store.state.l2ChainId,
+				store.getters.Bridge,
+				store.getters.Conversion,
+				account,
+				{
+					signal,
+					onChunk: async () => {
+						if (isContextValid(account, session)) {
+							txList.value = await loadTransactions(account);
+						}
+					}
+				}
+		);
+	} catch (err) {
+		console.warn("Scan logs error:", err);
+	} finally {
+		if (isContextValid(account, session)) syncing.value = false;
+	}
+}
+
+async function runStatusPolling(account, session, signal) {
+	if (!isContextValid(account, session) || signal.aborted) return;
+
 	try {
 		const l1ChainId = store.state.l1ChainId;
 		const l2ChainId = store.state.l2ChainId;
 		const bridge = store.getters.Bridge;
 		const multicall = store.getters.Multicall;
-		await syncUserTransactions(l1ChainId, l2ChainId, bridge, multicall, account, {
-			signal,
-			onChunk: async () => {
-				// First-time sync can be slow; refresh periodically as chunks land.
-				await refreshListThrottled(account, mySession);
-			}
-		});
+		await syncPendingStatus(l1ChainId, l2ChainId, bridge, multicall, account, { signal });
 
-		await refreshListThrottled(account, mySession, 0);
-	} catch (err) {
-		if (err?.name === "AbortError") return;
-		console.error("sync error", err);
-	} finally {
-		if (sessionId === mySession) {
-			syncing.value = false;
+		if (isContextValid(account, session)) {
+			txList.value = await loadTransactions(account);
 		}
+	} catch (err) {
+		console.error("Poll status error:", err);
 	}
 
-	scheduleNext(account, mySession, signal);
-}
-
-function scheduleNext(account, mySession, signal) {
-	if (!isActive(account, mySession, signal)) return;
-
-	timer = setTimeout(() => {
-		runPoll(account, mySession, signal);
-	}, POLL_INTERVAL);
+	statusTimer = setTimeout(() => {
+		runStatusPolling(account, session, signal);
+	}, STATUS_POLL_INTERVAL);
 }
 
 export async function refreshLocalList() {
 	const account = store.state.account;
 	if (!account) return;
-
-	try {
-		txList.value = await loadTransactions(account);
-	} catch (err) {
-		console.error("refresh local list error", err);
-	}
+	txList.value = await loadTransactions(account);
 }

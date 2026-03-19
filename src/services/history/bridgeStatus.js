@@ -102,6 +102,7 @@ async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal) {
 	return tx;
 }
 
+// TODO
 export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, multicall, address, opts = {}) {
 	const { signal } = opts;
 	const pendings = await loadPendingTransactions(address);
