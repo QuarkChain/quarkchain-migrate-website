@@ -80,14 +80,15 @@ async function runStatusPolling(account, session, signal) {
 		const l1ChainId = store.state.l1ChainId;
 		const l2ChainId = store.state.l2ChainId;
 		const bridge = store.getters.Bridge;
-		const multicall = store.getters.Multicall;
-		await syncPendingStatus(l1ChainId, l2ChainId, bridge, multicall, account, { signal });
-
+		const multicallL1 = store.getters.MulticallL1;
+		const multicallL2 = store.getters.MulticallL2;
+		await syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL1, multicallL2, account, { signal });
+	} catch (err) {
+		console.error("Poll status error:", err);
+	} finally {
 		if (isContextValid(account, session)) {
 			txList.value = await loadTransactions(account);
 		}
-	} catch (err) {
-		console.error("Poll status error:", err);
 	}
 
 	statusTimer = setTimeout(() => {

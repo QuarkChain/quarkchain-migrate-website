@@ -30,7 +30,8 @@ export default createStore({
     Bridge: (state) => CONTRACTS[state.l1ChainId].Bridge || {},
     L1StandardBridge: (state, getters) => getters.Bridge.L1StandardBridge || null,
     L2StandardBridge: (state, getters) => getters.Bridge.L2StandardBridge || null,
-    Multicall: (state) => CONTRACTS[state.l1ChainId].Multicall || null,
+    MulticallL1: (state) => CONTRACTS[state.l1ChainId].MulticallL1 || null,
+    MulticallL2: (state) => CONTRACTS[state.l1ChainId].MulticallL2 || null,
   },
   mutations: {
     SET_ACCOUNT: (state, p) => state.account = p,

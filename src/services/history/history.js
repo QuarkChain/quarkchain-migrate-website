@@ -2,7 +2,7 @@ import pLimit from 'p-limit';
 import { ethers } from "ethers";
 import { loadProgress, saveTransactions, updateProgress } from "./db.js";
 import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
-import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
+import { BRIDGE_DIRECTION, BRIDGE_STATUS, API_CONFIG } from "@/config/constant.js";
 
 const BRIDGE_DEPLOY_BLOCK = {
 	'0x1': 23874421,      // Ethereum mainnet
@@ -10,13 +10,6 @@ const BRIDGE_DEPLOY_BLOCK = {
 	'0x186ab': 170563,    // QKC mainnet
 	'0x1adbb': 169841      // QKC Sepolia
 }
-
-const API_CONFIG = {
-	'0x1': 'https://eth.blockscout.com/api',
-	'0xaa36a7': 'https://eth-sepolia.blockscout.com/api',
-	'0x186ab': 'https://explorer.mainnet.l2.quarkchain.io/api',
-	'0x1adbb': 'https://explorer.delta.testnet.l2.quarkchain.io/api'
-};
 
 const TOPICS = {
 	BRIDGE: ethers.id("ERC20BridgeInitiated(address,address,address,address,uint256,bytes)"),

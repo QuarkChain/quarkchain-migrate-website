@@ -24,3 +24,10 @@ export const STATUS = {
 	DISABLED: 'disabled',
 	FAILED: 'failed',
 }
+
+export const API_CONFIG = {
+	'0x1': 'https://eth.blockscout.com/api',
+	'0xaa36a7': 'https://eth-sepolia.blockscout.com/api',
+	'0x186ab': 'https://explorer.mainnet.l2.quarkchain.io/api',
+	'0x1adbb': 'https://explorer.delta.testnet.l2.quarkchain.io/api'
+};

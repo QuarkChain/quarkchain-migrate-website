@@ -2,7 +2,8 @@ import pLimit from 'p-limit';
 import { ethers } from 'ethers';
 import { loadPendingTransactions, saveTransactions } from "@/services/history/db.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
-import { checkL1ToL2Status, getL1ToL2MessageHash } from "@/services/bridge/l1ToL2.js";
+import { queryL2MintStatuses } from "@/services/migration/nativeMigration.js";
+import { batchCheckL1ToL2Status, getL1ToL2MessageHash } from "@/services/bridge/l1ToL2.js";
 import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
 import {
 	checkFinalizeStatusByHash,
@@ -53,118 +54,172 @@ async function batchCheckFinalized(l1Provider, portalAddress, multicallAddress, 
 
 async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal) {
 	throwIfAborted(signal);
-	if (tx.direction === BRIDGE_DIRECTION.L1_TO_L2) {
-		// l1 to l2
-		const l2Provider = getL2Provider(l2ChainId);
-		const status = await checkL1ToL2Status(l2Provider, bridge.L2CrossDomainMessenger, tx.msgHash);
-		tx.status = status || tx.status;
 
-		if (tx.status === BRIDGE_STATUS.COMPLETED || tx.status === BRIDGE_STATUS.FAILED) {
-			tx.remaining = 0;
-		} else {
-			const EXPECTED_DURATION = 3 * 60;
-			const now = Math.floor(Date.now() / 1000);
-			const elapsed = now - tx.timestamp;
-			tx.remaining = Math.max(60, EXPECTED_DURATION - elapsed);
-		}
-	} else {
-		// l2 to l1
+	// l2 to l1
+	try {
+		// can withdraw
+		let finalize = {canFinalize: false, seconds: 0};
 		try {
-			// can withdraw
-			let finalize = { canFinalize: false, seconds: 0 };
-			try {
-				finalize = await checkFinalizeStatusByHash(tx.hash, l1ChainId, l2ChainId, tx.msgHash);
-			} catch (e) {
-			}
-
-			if (finalize.canFinalize) {
-				tx.status = BRIDGE_STATUS.READY_TO_WITHDRAW;
-				tx.remaining = 0;
-			} else if (finalize.seconds > 0) {
-				tx.status = BRIDGE_STATUS.CHALLENGE_PERIOD;
-				tx.remaining = finalize.seconds;
-			} else {
-				// can prove
-				const prove = await checkProveStatus(tx.hash, l1ChainId, l2ChainId);
-				if (prove.canProve) {
-					tx.status = BRIDGE_STATUS.READY_TO_PROVE;
-					tx.remaining = 0;
-				} else {
-					tx.status = BRIDGE_STATUS.WAITING_PROVE_WINDOW;
-					tx.remaining = prove.seconds || 0;
-				}
-			}
+			finalize = await checkFinalizeStatusByHash(tx.hash, l1ChainId, l2ChainId, tx.msgHash);
 		} catch (e) {
-			console.warn("L2 to L1 status check failed", e);
 		}
-	}
 
+		if (finalize.canFinalize) {
+			tx.status = BRIDGE_STATUS.READY_TO_WITHDRAW;
+			tx.remaining = 0;
+		} else if (finalize.seconds > 0) {
+			tx.status = BRIDGE_STATUS.CHALLENGE_PERIOD;
+			tx.remaining = finalize.seconds;
+		} else {
+			// can prove
+			const prove = await checkProveStatus(tx.hash, l1ChainId, l2ChainId);
+			if (prove.canProve) {
+				tx.status = BRIDGE_STATUS.READY_TO_PROVE;
+				tx.remaining = 0;
+			} else {
+				tx.status = BRIDGE_STATUS.WAITING_PROVE_WINDOW;
+				tx.remaining = prove.seconds || 0;
+			}
+		}
+	} catch (e) {
+		console.warn("L2 to L1 status check failed", e);
+	}
 	return tx;
 }
 
-// TODO
-export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, multicall, address, opts = {}) {
+export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL1, multicallL2, address, opts = {}) {
 	const { signal } = opts;
-	const pendings = await loadPendingTransactions(address);
-	if (pendings.length === 0) return;
+	const allPendings = await loadPendingTransactions(address);
+	if (allPendings.length === 0) return;
 
+	// 1. Native Migration (CONVERT)
+	const migrationTxs = allPendings.filter(tx => tx.type === 'CONVERT');
+
+	// 2. Bridge (BRIDGE)
+	const bridgeTxs = allPendings.filter(tx => tx.type === 'BRIDGE');
+	const l1ToL2BridgeTxs = bridgeTxs.filter(tx => tx.direction === BRIDGE_DIRECTION.L1_TO_L2);
+	const l2ToL1BridgeTxs = bridgeTxs.filter(tx => tx.direction === BRIDGE_DIRECTION.L2_TO_L1);
+
+	const syncTasks = [];
+	if (migrationTxs.length > 0) {
+		syncTasks.push(handleMigrationSync(l2ChainId, address, migrationTxs, signal));
+	}
+	if (l1ToL2BridgeTxs.length > 0) {
+		syncTasks.push(handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicallL2, l1ToL2BridgeTxs, signal));
+	}
+	if (l2ToL1BridgeTxs.length > 0) {
+		syncTasks.push(handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicallL1, l2ToL1BridgeTxs, signal));
+	}
+	await Promise.all(syncTasks);
+}
+
+async function handleMigrationSync(l2ChainId, address, txs, signal) {
+	try {
+		const resultMap = await queryL2MintStatuses(l2ChainId, address, txs, signal);
+		const updates = [];
+		for (const [id, result] of resultMap) {
+			if (result) {
+				updates.push({
+					id,
+					status: BRIDGE_STATUS.COMPLETED,
+					remaining: 0
+				});
+			}
+		}
+		if (updates.length > 0) {
+			await saveTransactions(updates);
+		}
+	} catch (e) {
+		console.error("Migration sync failed", e);
+	}
+}
+
+async function handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicall, txs, signal) {
 	const l1Provider = getL1Provider(l1ChainId);
-	// 1. get all Hash
-	const msgHashLimit = pLimit(5);
-	const msgHashTasks = pendings.map(tx => msgHashLimit(async () => {
-		if (signal?.aborted) return;
+	const l2Provider = getL2Provider(l2ChainId);
+
+	// 1. batch get msgHash
+	const limit = pLimit(3);
+	const hashTasks = txs.map(tx => limit(async () => {
 		if (!tx.msgHash) {
 			try {
-				if (tx.direction === BRIDGE_DIRECTION.L2_TO_L1) {
-					const { withdrawal } = await extractWithdrawal(tx.hash, l2ChainId);
-					tx.msgHash = withdrawal.withdrawalHash;
-				} else {
-					tx.msgHash = await getL1ToL2MessageHash(l1Provider, tx.hash, bridge.L1CrossDomainMessengerProxy);
-				}
-				if (tx.msgHash) {
-					await saveTransactions({ id: tx.id, msgHash: tx.msgHash });
-				} else {
-					console.warn(`Cannot fill msgHash for tx ${tx.id}, will be skipped`);
-				}
+				tx.msgHash = await getL1ToL2MessageHash(l1Provider, tx.hash, bridge.L1CrossDomainMessengerProxy);
+				if (tx.msgHash) await saveTransactions({ id: tx.id, msgHash: tx.msgHash });
 			} catch (e) {
-				if (e.name === 'AbortError') throw e;
-				console.warn(`Fill msgHash failed for tx ${tx.id}`, e);
+				console.warn(`L1->L2 msgHash error，Tx: ${tx.id}`, e);
 			}
 		}
 	}));
-	await Promise.all(msgHashTasks);
-	throwIfAborted(signal);
+	await Promise.all(hashTasks);
 
-	// 2. L1 Multicall
-	const validPendings = pendings.filter(tx => tx.msgHash);
-	if (validPendings.length === 0) return;
+	// 2. use Multicall
+	const validTxs = txs.filter(tx => tx.msgHash);
+	const statusMap = await batchCheckL1ToL2Status(
+			l2Provider,
+			bridge.L2CrossDomainMessenger,
+			multicall,
+			validTxs,
+			signal
+	);
 
-	const l2ToL1Txs = validPendings.filter(tx => tx.direction === BRIDGE_DIRECTION.L2_TO_L1);
-	let finalizedMap = {};
-	if (l2ToL1Txs.length > 0) {
-		finalizedMap = await batchCheckFinalized(l1Provider, bridge.L1OptimismPortalProxy, multicall, l2ToL1Txs, signal);
-	}
-	throwIfAborted(signal);
+	// 3. update status
+	const updates = txs.map(tx => {
+		const status = statusMap[tx.id];
+		let remaining;
+		if (status === BRIDGE_STATUS.COMPLETED || status === BRIDGE_STATUS.FAILED) {
+			remaining = 0;
+		} else {
+			const EXPECTED_DURATION = 3 * 60;
+			const elapsed = Math.floor(Date.now() / 1000) - tx.timestamp;
+			remaining = Math.max(60, EXPECTED_DURATION - elapsed);
+		}
+		return {
+			id: tx.id,
+			status: status || tx.status,
+			remaining,
+			msgHash: tx.msgHash
+		};
+	});
+	await saveTransactions(updates);
+}
 
-	// 3. get status
-	const statusLimit = pLimit(3);
-	const tasks = pendings.map(tx => statusLimit(async () => {
-		if (signal?.aborted) return;
+async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, signal) {
+	const l1Provider = getL1Provider(l1ChainId);
 
-		try {
-			if (finalizedMap[tx.id]) {
-				await saveTransactions({ id: tx.id, status: BRIDGE_STATUS.COMPLETED, remaining: 0, msgHash: tx.msgHash });
-				return;
+	// 1.get msgHash
+	const extractLimit = pLimit(3);
+	const extractTasks = txs.map(tx => extractLimit(async () => {
+		if (!tx.msgHash) {
+			try {
+				const { withdrawal } = await extractWithdrawal(tx.hash, l2ChainId);
+				tx.msgHash = withdrawal.withdrawalHash;
+				if (tx.msgHash) await saveTransactions({ id: tx.id, msgHash: tx.msgHash });
+			} catch (e) {
+				console.warn(`L2->L1 withdrawal error, Tx: ${tx.id}`, e);
 			}
-
-			const latest = await getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal);
-			await saveTransactions({
-				id: tx.id, status: latest.status, remaining: latest.remaining, msgHash: latest.msgHash
-			});
-		} catch (e) {
-			console.error("Sync failed", tx.id, e);
 		}
 	}));
+	await Promise.all(extractTasks);
 
+	throwIfAborted(signal);
+	// 2. multicall query Finalized
+	const finalizedMap = await batchCheckFinalized(
+			l1Provider,
+			bridge.L1OptimismPortalProxy,
+			multicall,
+			txs.filter(t => t.msgHash),
+			signal
+	);
+
+	// 3. query item
+	const limit = pLimit(3);
+	const tasks = txs.map(tx => limit(async () => {
+		if (finalizedMap[tx.id]) {
+			await saveTransactions({ id: tx.id, status: BRIDGE_STATUS.COMPLETED, remaining: 0 });
+			return;
+		}
+		const latest = await getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal);
+		await saveTransactions({ id: tx.id, status: latest.status, remaining: latest.remaining });
+	}));
 	await Promise.all(tasks);
 }

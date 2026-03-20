@@ -95,15 +95,44 @@ export async function waitForL2ERC20Bridge(L1ChainId, L2ChainId, Bridge, l1TxHas
 	}
 }
 
-export async function checkL1ToL2Status(l2Provider, L2CrossDomainMessenger, msgHash) {
-	if (!msgHash) return { status: BRIDGE_STATUS.UNKNOWN };
+export async function batchCheckL1ToL2Status(l2Provider, messengerAddress, multicallAddress, txs, signal) {
+	const validTxs = txs.filter(tx => tx.msgHash);
+	if (validTxs.length === 0) return {};
 
-	const l2Messenger = new ethers.Contract(L2CrossDomainMessenger, L2_MESSENGER_ABI, l2Provider);
-	const [isSuccessful, isFailed] = await Promise.all([
-		l2Messenger.successfulMessages(msgHash),
-		l2Messenger.failedMessages(msgHash)
-	]);
+	const multicall = new ethers.Contract(multicallAddress, [
+		"function aggregate(tuple(address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)"
+	], l2Provider);
 
-	if (isSuccessful) return BRIDGE_STATUS.COMPLETED;
-	if (isFailed) return BRIDGE_STATUS.FAILED;
+	const iface = new ethers.Interface(L2_MESSENGER_ABI);
+	const results = {};
+	const BATCH_SIZE = 25;
+	for (let i = 0; i < validTxs.length; i += BATCH_SIZE) {
+		if (signal?.aborted) return;
+
+		const batch = validTxs.slice(i, i + BATCH_SIZE);
+		const calls = [];
+		batch.forEach(tx => {
+			calls.push({ target: messengerAddress, callData: iface.encodeFunctionData("successfulMessages", [tx.msgHash]) });
+			calls.push({ target: messengerAddress, callData: iface.encodeFunctionData("failedMessages", [tx.msgHash]) });
+		});
+
+		try {
+			const [, returnData] = await multicall.aggregate(calls);
+			batch.forEach((tx, idx) => {
+				const successData = returnData[idx * 2];
+				const failedData = returnData[idx * 2 + 1];
+				const [isSuccessful] = iface.decodeFunctionResult("successfulMessages", successData);
+				const [isFailed] = iface.decodeFunctionResult("failedMessages", failedData);
+
+				if (isSuccessful) {
+					results[tx.id] = BRIDGE_STATUS.COMPLETED;
+				} else if (isFailed) {
+					results[tx.id] = BRIDGE_STATUS.FAILED;
+				}
+			});
+		} catch (e) {
+			console.error("L1->L2 Multicall failed", e);
+		}
+	}
+	return results;
 }
