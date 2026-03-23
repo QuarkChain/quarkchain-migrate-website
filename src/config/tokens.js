@@ -23,3 +23,15 @@ export const TOKEN_LIST = [
 		}
 	},
 ];
+
+
+export const getTokenConfig = (symbol, chainId) => {
+	const token = TOKEN_LIST.find(t => t.symbol === symbol);
+	if (!token || !token.networks[chainId]) return null;
+
+	return {
+		...token.networks[chainId],
+		symbol: token.symbol,
+		icon: token.icon
+	};
+};
