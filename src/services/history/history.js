@@ -176,13 +176,12 @@ async function fetchLogsViaAPI(apiUrl, address, topic0, topic3, from, to) {
 	return data.status === "1" ? data.result : [];
 }
 
-async function processBridgeLogs(logs, provider, userAddress) {
+async function processBridgeLogs(logs, userAddress) {
 	const limit = pLimit(5);
 
 	return Promise.all(logs.map(log => limit(async () => {
 		try {
 			const parsed = BRIDGE_IFACE.parseLog({ data: log.data, topics: log.topics });
-			const block = await provider.getBlock(log.blockNumber);
 			return {
 				id: log.transactionHash,
 				hash: log.transactionHash,
@@ -190,8 +189,8 @@ async function processBridgeLogs(logs, provider, userAddress) {
 				direction: BRIDGE_DIRECTION.L2_TO_L1,
 				status: BRIDGE_STATUS.UNKNOWN,
 				address: userAddress,
-				blockNumber: Number(log.blockNumber),
-				timestamp: block?.timestamp || Math.floor(Date.now() / 1000),
+				blockNumber: parseInt(log.blockNumber, 16),
+				timestamp: parseInt(log.timeStamp, 16),
 				token: parsed.args.localToken,
 				amount: parsed.args.amount.toString(),
 			};
@@ -228,7 +227,7 @@ export async function syncL2Withdrawals({ layer, chainId, bridgeAddr, userAddres
 		try {
 			let rawLogs = await fetchLogsViaAPI(apiUrl, bridgeAddr, BRIDGE_TOPIC, userTopic, current, to);
 			if (rawLogs.length > 0) {
-				const txs = await processBridgeLogs(rawLogs, provider, userAddress);
+				const txs = await processBridgeLogs(rawLogs, userAddress);
 				if (txs.length > 0) {
 					await saveTransactions(txs);
 					if (onChunk) onChunk({ count: txs.length, from: current, to });
