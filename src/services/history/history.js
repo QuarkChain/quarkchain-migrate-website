@@ -1,8 +1,7 @@
-import pLimit from 'p-limit';
 import { ethers } from "ethers";
 import { loadProgress, saveTransactions, updateProgress } from "./db.js";
-import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS, API_CONFIG } from "@/config/constant.js";
+import { CONVERT_ABI, L1_BRIDGE_ABI, L2_BRIDGE_ABI } from "@/config/abi.js";
 
 const BRIDGE_DEPLOY_BLOCK = {
 	'0x1': 23874421,      // Ethereum mainnet
@@ -11,30 +10,21 @@ const BRIDGE_DEPLOY_BLOCK = {
 	'0x1adbb': 169841      // QKC Sepolia
 }
 
-const TOPICS = {
-	BRIDGE: ethers.id("ERC20BridgeInitiated(address,address,address,address,uint256,bytes)"),
-	CONVERT: ethers.id("TransactionDeposited(address,address,uint256,bytes)")
+const METHOD_IDS = {
+	CONVERT: "0xba00600a",    // convert(uint256)
+	L1_BRIDGE: "0x2567f814",  // depositERC20To(address,address,address,uint256,uint32,bytes)
+	L2_BRIDGE: "0x370897cc"   // withdrawTo(address,address,uint256,uint32,bytes)
 };
 
 const IFACES = {
-	BRIDGE: new ethers.Interface(["event ERC20BridgeInitiated(address indexed localToken,address indexed remoteToken,address indexed from,address to,uint256 amount,bytes extraData)"]),
-	CONVERT: new ethers.Interface(["event TransactionDeposited(address indexed from, address indexed to, uint256 indexed version, bytes opaqueData)"])
+	CONVERT: new ethers.Interface(CONVERT_ABI),
+	L1_BRIDGE: new ethers.Interface(L1_BRIDGE_ABI),
+	L2_BRIDGE: new ethers.Interface(L2_BRIDGE_ABI)
 };
 
-const PARSERS = {
-	BRIDGE: (parsed) => ({
-		type: 'BRIDGE',
-		token: parsed.args.localToken,
-		amount: parsed.args.amount.toString(),
-	}),
-	CONVERT: (parsed) => {
-		const amount = parseAmountFromOpaqueData(parsed.args.opaqueData);
-		return {
-			type: 'CONVERT',
-			amount: amount,
-		};
-	}
-};
+const MAX_HISTORY_DAYS = 180;
+const HALF_YEAR_MS = MAX_HISTORY_DAYS * 24 * 60 * 60 * 1000;
+const PAGE_SIZE = 1000;
 
 function throwIfAborted(signal) {
 	if (signal?.aborted) {
@@ -44,169 +34,139 @@ function throwIfAborted(signal) {
 	}
 }
 
-function parseAmountFromOpaqueData(opaqueData) {
-	try {
-		const normalizedData = opaqueData.startsWith('0x') ? opaqueData : `0x${opaqueData}`;
-		if (!normalizedData || normalizedData === '0x' || normalizedData.length < 66) {
-			return "0";
-		}
-
-		const amountHex = normalizedData.substring(0, 66);
-		return BigInt(amountHex).toString();
-	} catch (error) {
-		return "0";
-	}
-}
-
-async function processLogs(logs, provider, type, userAddress, direction) {
-	const blocksToFetch = [];
-	const parsedLogs = logs.map(log => {
-		try {
-			const parsed = IFACES[type].parseLog({ data: log.data, topics: log.topics });
-			const data = PARSERS[type](parsed);
-
-			const bn = typeof log.blockNumber === 'string' ? parseInt(log.blockNumber, 16) : log.blockNumber;
-			let ts = null;
-			if (log.timeStamp) {
-				ts = log.timeStamp.startsWith('0x') ? parseInt(log.timeStamp, 16) : parseInt(log.timeStamp);
-			} else {
-				blocksToFetch.push(bn);
-			}
-
-			return { ...data, hash: log.transactionHash, blockNumber: bn, timestamp: ts };
-		} catch (e) { return null; }
-	}).filter(l => l !== null);
-
-	if (blocksToFetch.length > 0) {
-		const blockCache = new Map();
-		const uniqueBlocks = [...new Set(blocksToFetch)];
-		const limit = pLimit(10);
-		await Promise.all(uniqueBlocks.map(bn => limit(async () => {
-			const block = await provider.getBlock(bn);
-			blockCache.set(bn, block?.timestamp || 0);
-		})));
-
-		parsedLogs.forEach(tx => {
-			if (tx.timestamp === null) tx.timestamp = blockCache.get(tx.blockNumber);
-		});
-	}
-
-	return parsedLogs.map(tx => ({
-		...tx,
-		id: tx.hash,
-		address: userAddress,
-		direction,
-		status: BRIDGE_STATUS.UNKNOWN
-	}));
-}
-
-async function fetchLogsWithAPIOnce(apiUrl, chainId, { address, topic0, topic1, topic2, topic3, fromBlock, toBlock }) {
+async function fetchTxPageDesc(apiUrl, address, page, offset, startblock) {
 	const params = new URLSearchParams({
-		module: 'logs',
-		action: 'getLogs',
+		module: 'account',
+		action: 'txlist',
 		address,
-		fromBlock: fromBlock.toString(),
-		toBlock: toBlock.toString(),
-		topic0
+		startblock: startblock.toString(),
+		page: page.toString(),
+		offset: offset.toString(),
+		sort: 'desc'
 	});
-	if (topic1) { params.append('topic1', topic1); params.append('topic0_1_opr', 'and'); }
-	if (topic2) { params.append('topic2', topic2); params.append('topic0_2_opr', 'and'); }
-	if (topic3) { params.append('topic3', topic3); params.append('topic0_3_opr', 'and'); }
-
 	const response = await fetch(`${apiUrl}?${params}`);
 	const data = await response.json();
-	if (data.status === "0") {
-		if (data.message === "No logs found" || data.result === null) return [];
-		throw new Error(`API Error: ${data.result}`);
+	if (data.status !== "1" || !Array.isArray(data.result)) {
+		return [];
 	}
-
-	return Array.isArray(data.result) ? data.result : [];
+	return data.result;
 }
 
-async function syncContractLogs({ layer, chainId, contractAddress, userAddress, type, opts }) {
+async function syncAccountHistory({ layer, chainId, bridgeAddr, convertAddr, userAddress, opts }) {
 	const { signal, onChunk } = opts;
-	const isL1 = layer === "L1";
-	const direction = isL1 ? BRIDGE_DIRECTION.L1_TO_L2 : BRIDGE_DIRECTION.L2_TO_L1;
-	const provider = isL1 ? getL1Provider(chainId) : getL2Provider(chainId);
 	const apiUrl = API_CONFIG[chainId];
+	if (!apiUrl) return;
 
-	const progressKey = `${layer}_${type}_${contractAddress.slice(0, 8)}`;
-	const progress = await loadProgress(userAddress, progressKey);
+	const direction = (layer === "L1") ? BRIDGE_DIRECTION.L1_TO_L2 : BRIDGE_DIRECTION.L2_TO_L1;
+	const now = Date.now();
 
-	let current = Math.max(progress.lastBlock + 1, BRIDGE_DEPLOY_BLOCK[chainId] || 0);
-	let latest = (await provider.getBlockNumber()) - (isL1 ? 1 : 6);
+	// load last block
+	const progress = await loadProgress(userAddress, layer);
+	const lastSyncedBlock = Math.max(progress.lastBlock || 0, BRIDGE_DEPLOY_BLOCK[chainId]);
 
-	const topic0 = TOPICS[type];
-	const userTopic = ethers.zeroPadValue(userAddress, 32);
-
-	const apiParams = { address: contractAddress, topic0 };
-	const rpcTopics = [topic0, null, null, null];
-	if (type === 'BRIDGE') {
-		// BRIDGE: from  -> topic3
-		apiParams.topic3 = userTopic;
-		rpcTopics[3] = userTopic;
-	} else if (type === 'CONVERT') {
-		// CONVERT: to -> topic2
-		apiParams.topic2 = userTopic;
-		rpcTopics[2] = userTopic;
-	}
-
-	// --- Use Api ---
-	if (apiUrl) {
-		try {
-			while (current <= latest) {
-				throwIfAborted(signal);
-				const to = Math.min(current + 800000, latest);
-
-				const rawLogs = await fetchLogsWithAPIOnce(apiUrl, chainId,{
-					...apiParams, fromBlock: current, toBlock: to
-				});
-				if (rawLogs.length > 0) {
-					const txs = await processLogs(rawLogs, provider, type, userAddress, direction);
-					if (txs.length > 0) await saveTransactions(txs);
-				}
-
-				await updateProgress(userAddress, progressKey, to);
-				if (onChunk) onChunk({ type, method: 'API', from: current, to });
-				current = to + 1;
-			}
-			return;
-		} catch (e) {
-			console.warn(`[${type}] API error: ${e.message}. Falling back to RPC...`);
-		}
-	}
-
-	// --- Use RPC ---
-	const RPC_WINDOW = isL1 ? 5000 : 50000;
-	while (current <= latest) {
+	let page = 1;
+	let hasMore = true;
+	let lastProcessedBlock = lastSyncedBlock;
+	while (hasMore) {
 		throwIfAborted(signal);
 
-		const to = Math.min(current + RPC_WINDOW, latest);
+		const txs = await fetchTxPageDesc(apiUrl, userAddress, page, PAGE_SIZE, lastSyncedBlock + 1);
+		if (!txs || txs.length === 0) break;
 
-		const rawLogs = await provider.getLogs({
-			address: contractAddress,
-			fromBlock: current,
-			toBlock: to,
-			topics: rpcTopics
-		});
-		if (rawLogs.length > 0) {
-			const txs = await processLogs(rawLogs, provider, type, userAddress, direction);
-			if (txs.length > 0) await saveTransactions(txs);
+		if (page === 1) {
+			lastProcessedBlock = parseInt(txs[0].blockNumber);
 		}
 
-		await updateProgress(userAddress, progressKey, to);
-		current = to + 1;
+		const txsToSave = [];
+		for (const tx of txs) {
+			const bn = parseInt(tx.blockNumber);
+			const ts = parseInt(tx.timeStamp) * 1000;
+			const to = tx.to?.toLowerCase();
+			const input = tx.input.toLowerCase();
+
+			if (bn <= lastSyncedBlock) {
+				hasMore = false;
+				break;
+			}
+			if (now - ts > HALF_YEAR_MS) {
+				hasMore = false;
+				break;
+			}
+
+			// decode
+			let parsed = null;
+			if (layer === "L1" && convertAddr && to === convertAddr.toLowerCase() && input.startsWith(METHOD_IDS.CONVERT)) {
+				try {
+					const decoded = IFACES.CONVERT.decodeFunctionData("convert", input);
+					parsed = { type: 'CONVERT', amount: decoded[0].toString(), token: 'NATIVE' };
+				} catch (e) {}
+			}
+			else if (layer === "L1" && to === bridgeAddr.toLowerCase() && input.startsWith(METHOD_IDS.L1_BRIDGE)) {
+				try {
+					const decoded = IFACES.L1_BRIDGE.decodeFunctionData("depositERC20To", input);
+					parsed = { type: 'BRIDGE', amount: decoded[3].toString(), token: decoded[0] };
+				} catch (e) {}
+			}
+			else if (layer === "L2" && to === bridgeAddr.toLowerCase() && input.startsWith(METHOD_IDS.L2_BRIDGE)) {
+				try {
+					const decoded = IFACES.L2_BRIDGE.decodeFunctionData("withdrawTo", input);
+					parsed = { type: 'BRIDGE', amount: decoded[2].toString(), token: decoded[0] };
+				} catch (e) {}
+			}
+
+			if (parsed) {
+				txsToSave.push({
+					...parsed,
+					id: tx.hash,
+					hash: tx.hash,
+					blockNumber: bn,
+					timestamp: Math.floor(ts / 1000),
+					address: userAddress,
+					direction,
+					status: BRIDGE_STATUS.UNKNOWN
+				});
+			}
+		}
+
+		if (txsToSave.length > 0) {
+			await saveTransactions(txsToSave);
+			if (onChunk) onChunk({ layer });
+		}
+
+		// count < PAGE_SIZE, no more data
+		if (txs.length < PAGE_SIZE) {
+			hasMore = false;
+		}
+
+		page++;
+		// safe limit
+		if (page > 100) break;
+	}
+
+	// update block
+	if (lastProcessedBlock > lastSyncedBlock) {
+		await updateProgress(userAddress, layer, lastProcessedBlock);
 	}
 }
 
 export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, conversion, account, opts = {}) {
 	const { L1StandardBridge, L2StandardBridge } = bridge;
 	await Promise.all([
-		// 1. L1
-		syncContractLogs({ layer: "L1", chainId: l1ChainId, contractAddress: L1StandardBridge, userAddress: account, type: 'BRIDGE', opts }),
-		// 2. L2
-		syncContractLogs({ layer: "L2", chainId: l2ChainId, contractAddress: L2StandardBridge, userAddress: account, type: 'BRIDGE', opts }),
-		// 3. Conversion
-		syncContractLogs({ layer: "L1", chainId: l1ChainId, contractAddress: conversion, userAddress: account, type: 'CONVERT', opts })
+		syncAccountHistory({
+			layer: "L1",
+			chainId: l1ChainId,
+			bridgeAddr: L1StandardBridge,
+			convertAddr: conversion,
+			userAddress: account,
+			opts
+		}),
+		syncAccountHistory({
+			layer: "L2",
+			chainId: l2ChainId,
+			bridgeAddr: L2StandardBridge,
+			convertAddr: null,
+			userAddress: account,
+			opts
+		})
 	]);
 }
