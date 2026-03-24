@@ -411,7 +411,7 @@ async function runStep1() {
 			ElMessage.success("Approved successfully.");
 		} else {
 			steps[1] = STATUS.IDLE;
-			ElMessage.error("Approved amount < migration amount.");
+			ElMessage.error("Approved amount < bridge amount.");
 		}
 	} catch (e) {
 		steps[1] = STATUS.IDLE;
@@ -434,14 +434,12 @@ async function runStep2() {
 			const { address, decimals } = L1Token.value;
 			const value = formatAmount(amount.value.toString(), decimals);
 			await saveTransactions({
+				type: 'BRIDGE',
 				id: receipt.hash,
 				address: account.value,
 				direction: BRIDGE_DIRECTION.L1_TO_L2,
 				hash: receipt.hash,
-				msgHash: null,
 				token: address,
-				from: account.value,
-				to: L1StandardBridge.value,
 				amount: value.toString(),
 				timestamp: currentTimestamp,
 				blockNumber: receipt.blockNumber,

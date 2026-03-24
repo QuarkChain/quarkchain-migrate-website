@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import { CONVERT_ABI } from "@/config/abi.js";
 import { API_CONFIG } from "@/config/constant.js";
-import { getL1Provider, getL2Provider, getSigner } from "@/infra/provider/providerManager.js";
+import { getL1Provider, getSigner } from "@/infra/provider/providerManager.js";
 import { getAllowance, approve } from "@/infra/erc20/erc20.js";
 
 // query
@@ -10,69 +10,53 @@ export async function getL1Erc20Allowance(l1ChainId, tokenAddress, userAddress, 
     return getAllowance(tokenAddress, provider, userAddress, convertAddress);
 }
 
-export async function getL2QKCBalance(l2ChainId, userAddress) {
-    const provider = getL2Provider(l2ChainId);
-    return provider.getBalance(userAddress);
-}
-
 // send
 export async function approveErc20(l1ChainId, tokenAddress, convertAddress, amount) {
     const signer = await getSigner(l1ChainId);
-    return approve(tokenAddress, signer, convertAddress, ethers.parseEther(amount));
+    return approve(tokenAddress, signer, convertAddress, ethers.parseEther(amount.toString()));
 }
 
 export async function convert(l1ChainId, convertAddress, amount) {
     const signer = await getSigner(l1ChainId);
     const contract = new ethers.Contract(convertAddress, CONVERT_ABI, signer);
-    const estimatedGas = await contract.convert.estimateGas(ethers.parseEther(amount));
-    return await contract.convert(ethers.parseEther(amount), {
-        gasLimit: estimatedGas * 15n / 10n
-    });
+    return await contract.convert(ethers.parseEther(amount.toString()));
 }
 
-const INTERVAL = 3000;
-const MAX_RETRY = 100;
+const INTERVAL = 20000;
 
 function isSystemSender(address) {
     return address?.toLowerCase().startsWith("0xdeaddeaddeaddeaddeaddeaddeaddead");
 }
 
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+export async function waitForL2Mint(l2ChainId, userAddress, targetAmount, startTime, signal) {
+    const targetWei = BigInt(targetAmount);
+    const pendingItem = {
+        id: 'current_tracking',
+        amount: targetWei.toString(),
+        timestamp: startTime
+    };
 
-export async function waitForL2Mint(l2ChainId, userAddress, signal) {
-    const provider = getL2Provider(l2ChainId);
-    const user = userAddress.toLowerCase();
-    let lastCheckedBlock = await provider.getBlockNumber() - 1;
+    console.log(`[L2 Watcher] Start polling API for amount: ${targetWei.toString()}`);
+    while (true) {
+        if (signal?.aborted) throw new Error("Polling aborted");
 
-    console.log(`Start watching L2 from block ${lastCheckedBlock}`);
-    for (let retry = 0; retry < MAX_RETRY; retry++) {
-        if (signal?.aborted) {
-            throw new Error("Polling aborted");
-        }
-        const latestBlock = await provider.getBlockNumber();
-
-        for (let i = lastCheckedBlock + 1; i <= latestBlock; i++) {
-            const block = await provider.getBlock(i, true);
-            if (!block || block.transactions.length === 0) continue;
-
-            for (const txHash of block.transactions) {
-                const tx = await provider.getTransaction(txHash);
-                const from = tx.from?.toLowerCase();
-                const to = tx.to?.toLowerCase();
-                if (isSystemSender(from) && to === user) {
-                    console.log(`L2 Mint found at block ${i}, tx: ${tx.hash}`);
-                    return tx.hash;
-                }
+        try {
+            const resultMap = await queryL2MintStatuses(
+                l2ChainId,
+                userAddress,
+                [pendingItem],
+                signal
+            );
+            if (resultMap.get(pendingItem.id)) {
+                console.log("[L2 Watcher] Mint transaction detected via API!");
+                return true;
             }
+        } catch (e) {
+            console.error("[L2 Watcher] API error, retrying...", e);
         }
 
-        lastCheckedBlock = latestBlock;
-        console.log(`Waiting for L2 mint... checked up to block ${latestBlock}`);
-        await delay(INTERVAL);
+        await new Promise(resolve => setTimeout(resolve, INTERVAL));
     }
-    throw Error("L2 mint not found within time limit");
 }
 
 

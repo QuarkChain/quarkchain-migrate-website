@@ -661,14 +661,12 @@ async function btnWithdraw() {
 			const { address, decimals } = L2Token.value;
 			const value = ethers.parseUnits(amount.value.toString(), decimals);
 			await saveTransactions({
+				type: 'BRIDGE',
 				id: receipt.hash,
 				address: account.value,
 				direction: BRIDGE_DIRECTION.L2_TO_L1,
 				hash: receipt.hash,
-				msgHash: null,
 				token: address,
-				from: account.value,
-				to: L2StandardBridge.value,
 				amount: value.toString(),
 				timestamp: currentTimestamp,
 				blockNumber: receipt.blockNumber,

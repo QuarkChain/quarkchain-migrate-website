@@ -228,7 +228,7 @@ import { Timer, Coin } from '@element-plus/icons-vue';
 import { ethers } from 'ethers';
 import { NETWORKS } from "@/config/networks.js";
 import { usePolling } from "@/ui/composables/usePolling.js";
-import { getGasPrice } from "@/services/bridge/l1ToL2.js";
+import { getGasPrice, getTokenAllowance } from "@/services/bridge/l1ToL2.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS, STATUS } from "@/config/constant.js";
 import { saveTransactions } from "@/services/history/db.js";
 import {
@@ -241,13 +241,17 @@ import {
 import BridgeItemCard from '@/ui/components/BridgeItemCard.vue';
 import quarkIcon from '@/assets/quarkchain.svg'
 
-// --- Constants & Config ---
-const APPROVE_GAS_LIMIT = 80000n;
-const DEPOSIT_GAS_LIMIT = 1500000n;
+// --- 1. Constants & Utils ---
+const GAS_LIMITS = {
+	APPROVE: 80000n,
+	DEPOSIT: 250000n
+};
+
+const toWei = (val) => (val ? ethers.parseEther(val.toString()) : 0n);
 
 const emit = defineEmits(['finish']);
 
-// --- Store & Computed ---
+// --- 2. State & Store ---
 const store = useStore();
 const account = computed(() => store.state.account);
 const config = computed(() => ({
@@ -259,24 +263,21 @@ const config = computed(() => ({
 const fromNetwork = computed(() => NETWORKS[config.value.l1Id]);
 const toNetwork = computed(() => NETWORKS[config.value.l2Id]);
 
-// global state
 const visible = ref(false);
 const currentPage = ref(1);
 const mode = ref('new'); // 'new' | 'history'
-const isHistoryMode = computed(() => mode.value === 'history');
 const hasStateChanged = ref(false);
 
 // state
 const hasConfirmed = ref(false);
 
-const createInitialSteps = () => ({
-	1: STATUS.IDLE,
-	2: STATUS.DISABLED,
-	3: STATUS.DISABLED,
-	4: STATUS.DISABLED
-})
-const steps = reactive(createInitialSteps())
-
+// page 2
+const steps = reactive({
+	1: STATUS.IDLE, // Approve
+	2: STATUS.DISABLED, // Deposit
+	3: STATUS.DISABLED, // L2 Minting
+	4: STATUS.DISABLED  // Finish
+});
 const gas1ETH = ref('');
 const gas2ETH = ref('');
 const gasLoaded = ref(false);
@@ -284,67 +285,154 @@ const gasLoaded = ref(false);
 const amount = ref(0);
 let mintController = null;
 
+// --- 3. Computed Logic ---
+const isHistoryMode = computed(() => mode.value === 'history');
+
+// --- 4. Polling Hooks ---
 const gasPollingEnabled = computed(() => visible.value && !isHistoryMode.value && steps[2] !== STATUS.SUCCESS);
 usePolling(loadGasCost, 30000, gasPollingEnabled);
 
-// methods
-function formatAmount(val) {
-	return ethers.parseEther(val.toString());
-}
-
-function abortPending() {
-	mintController?.abort();
-	mintController = null;
-}
-
-function show({ amount: am, mode: md = 'new', txHash, status }) {
+// --- 5. Core Actions ---
+async function show({ amount: am, mode: md = 'new', txHash, status, timestamp }) {
 	// if dialog already open, prevent stale requests
 	abortPending();
 
 	// reset & props
-	currentPage.value= 1;
-	Object.assign(steps, createInitialSteps());
-	mode.value = md || 'new';
+	Object.assign(steps, { 1: STATUS.IDLE, 2: STATUS.DISABLED, 3: STATUS.DISABLED, 4: STATUS.DISABLED });
+	mode.value = md;
 	amount.value = Number(am);
-
-	// status
 	visible.value = true;
-	if (isHistoryMode.value) {
-		// history mode: no approval/start actions; show progress/result only
-		currentPage.value = 2;
-		steps[1] = STATUS.SUCCESS;
-		steps[2] = STATUS.SUCCESS;
-		if (status === BRIDGE_STATUS.COMPLETED) {
-			steps[3] = STATUS.SUCCESS;
-			steps[4] = STATUS.SUCCESS;
-			return;
-		}
+	currentPage.value = isHistoryMode.value ? 2 : 1;
 
-		steps[3] = STATUS.IDLE;
-		if (txHash) handleL2Minting(txHash);
+	if (isHistoryMode.value) {
+		handleHistoryTransition(txHash, status, timestamp);
 	} else {
-		loadData();
+		await initNewMigration();
 	}
 }
 
-async function loadData() {
+async function initNewMigration() {
 	try {
-		const allowance = await getL1Erc20Allowance(
-				config.value.l1Id,
-				config.value.oldToken,
-				account.value,
-				config.value.conversion
-		);
-		if (allowance >= formatAmount(amount.value)) {
-			steps[1] = STATUS.SUCCESS
-			steps[2] = STATUS.IDLE
+		const allowance = await getL1Erc20Allowance(config.value.l1Id, config.value.oldToken, account.value, config.value.conversion);
+		if (BigInt(allowance) >= toWei(amount.value)) {
+			steps[1] = STATUS.SUCCESS;
+			steps[2] = STATUS.IDLE;
 		}
 		await loadGasCost();
 	} catch (e) {
-		console.error("Init migration failed", e);
+		console.error("Init failed", e);
 	}
 }
 
+function handleHistoryTransition(txHash, status, timestamp) {
+	steps[1] = STATUS.SUCCESS;
+	steps[2] = STATUS.SUCCESS;
+
+	if (status === BRIDGE_STATUS.COMPLETED) {
+		steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.SUCCESS;
+	} else {
+		steps[3] = STATUS.IDLE;
+		if (txHash) startL2Watching(txHash, timestamp || Math.floor(Date.now()/1000));
+	}
+}
+
+/**
+ * Step 1: approve
+ */
+async function handleApprove() {
+	if (steps[1] !== STATUS.IDLE) return;
+
+	steps[1] = STATUS.LOADING;
+	try {
+		await approveErc20(config.value.l1Id, config.value.oldToken, config.value.conversion, amount.value);
+		const allowance = await getTokenAllowance(config.value.l1Id, config.value.oldToken, account.value, config.value.conversion);
+		if (BigInt(allowance) >= toWei(amount.value)) {
+			steps[1] = STATUS.SUCCESS;
+			steps[2] = STATUS.IDLE;
+			ElMessage.success("Approved successfully.");
+		} else {
+			throw new Error("Insufficient allowance");
+		}
+	} catch (e) {
+		steps[1] = STATUS.IDLE;
+		ElMessage.error(e.message === "Insufficient allowance" ? "Allowance too low" : "Approve failed");
+	}
+}
+
+/**
+ * Step 2: L1 Migration
+ */
+async function handleMigration() {
+	if (steps[2] !== STATUS.IDLE) return;
+
+	steps[2] = STATUS.LOADING;
+	try {
+		const tx = await convert(config.value.l1Id, config.value.conversion, amount.value);
+		const receipt = await tx.wait();
+		if (receipt?.status === 1) {
+			steps[2] = STATUS.SUCCESS;
+			steps[3] = STATUS.IDLE;
+
+			const txData = {
+				type: 'CONVERT',
+				id: receipt.hash,
+				hash: receipt.hash,
+				address: account.value,
+				direction: BRIDGE_DIRECTION.L1_TO_L2,
+				token: config.value.oldToken,
+				amount: toWei(amount.value).toString(),
+				timestamp: Math.floor(Date.now() / 1000),
+				blockNumber: receipt.blockNumber,
+				status: BRIDGE_STATUS.UNKNOWN,
+			};
+			await saveTransactions(txData);
+			hasStateChanged.value = true;
+
+			ElMessage.success("L1 Transaction confirmed.");
+			startL2Watching(receipt.hash, txData.timestamp);
+		} else {
+			throw new Error("Reverted");
+		}
+	} catch (e) {
+		steps[2] = STATUS.IDLE;
+		ElMessage.error("Migration transaction failed.");
+	}
+}
+
+/**
+ * Step 3: l2 status
+ */
+async function startL2Watching(txHash, startTime) {
+	if (steps[3] === STATUS.LOADING) return;
+
+	abortPending();
+	mintController = new AbortController();
+
+	steps[3] = STATUS.LOADING;
+	try {
+		await waitForL2Mint(
+				config.value.l2Id,
+				account.value,
+				toWei(amount.value),
+				startTime,
+				mintController.signal
+		);
+		steps[3] = STATUS.SUCCESS;
+		steps[4] = STATUS.SUCCESS;
+		await saveTransactions({ id: txHash, status: BRIDGE_STATUS.COMPLETED });
+		hasStateChanged.value = true;
+
+		ElMessage.success("L2 tokens received!");
+	} catch (e) {
+		if (mintController?.signal.aborted) return;
+
+		steps[3] = STATUS.IDLE;
+		ElMessage.error("L2 sync timeout. Please check later.");
+	}
+}
+
+// --- 6. Helpers ---
 async function loadGasCost() {
 	if (steps[2] === STATUS.SUCCESS) return;
 
@@ -356,8 +444,8 @@ async function loadGasCost() {
 			return Number(eth).toFixed(8).replace(/\.?0+$/, '');
 		};
 
-		gas1ETH.value = format(APPROVE_GAS_LIMIT);
-		gas2ETH.value = format(DEPOSIT_GAS_LIMIT);
+		gas1ETH.value = format(GAS_LIMITS.APPROVE);
+		gas2ETH.value = format(GAS_LIMITS.DEPOSIT);
 		gasLoaded.value = true;
 	} catch (e) {
 		if (gas1ETH.value) {
@@ -366,91 +454,14 @@ async function loadGasCost() {
 	}
 }
 
-// --- Action Handlers ---
-async function handleApprove() {
-	if (steps[1] !== STATUS.IDLE) return;
-
-	steps[1] = STATUS.LOADING;
-	try {
-		await approveErc20(config.value.l1Id, config.value.oldToken, config.value.conversion, amount.value);
-		steps[1] = STATUS.SUCCESS;
-		steps[2] = STATUS.IDLE;
-		ElMessage.success("Approved successfully.");
-	} catch (e) {
-		steps[1] = STATUS.IDLE;
-		ElMessage.error("Approve failed.");
-	}
+function abortPending() {
+	mintController?.abort();
+	mintController = null;
 }
 
-async function handleMigration() {
-	if (steps[2] !== STATUS.IDLE) return;
-
-	steps[2] = STATUS.LOADING;
-	try {
-		const tx = await convert(config.value.l1Id, config.value.conversion, amount.value);
-		const receipt = await tx.wait();
-		if (receipt?.status === 1) {
-			steps[2] = STATUS.SUCCESS;
-			steps[3] = STATUS.IDLE;
-			ElMessage.success("Transaction confirmed on L1.");
-
-			await saveTransactions({
-				id: receipt.hash,
-				address: account.value,
-				direction: BRIDGE_DIRECTION.L1_TO_L2,
-				hash: receipt.hash,
-				token: config.value.oldToken,
-				from: account.value,
-				to: config.value.conversion,
-				amount: ethers.parseEther(amount.value.toString()).toString(),
-				timestamp: Math.floor(Date.now() / 1000),
-				blockNumber: receipt.blockNumber,
-				status: BRIDGE_STATUS.UNKNOWN,
-				remaining: 3 * 60
-			});
-			hasStateChanged.value = true;
-
-			handleL2Minting(receipt.hash);
-		} else {
-			steps[2] = STATUS.IDLE;
-			ElMessage.error("Transaction reverted");
-		}
-	} catch (e) {
-		steps[2] = STATUS.IDLE;
-		ElMessage.error("Migration failed.");
-	}
-}
-
-async function handleL2Minting(txHash) {
-	if (steps[3] === STATUS.LOADING) return;
-
-	abortPending();
-	mintController = new AbortController();
-
-	steps[3] = STATUS.LOADING;
-	try {
-		await waitForL2Mint(config.value.l2Id, account.value, mintController.signal);
-		steps[3] = STATUS.SUCCESS;
-		steps[4] = STATUS.SUCCESS;
-		await saveTransactions({
-			id: txHash,
-			status: BRIDGE_STATUS.COMPLETED,
-			remaining: 0
-		});
-
-		ElMessage.success("L2 mint completed.");
-		hasStateChanged.value = true;
-	} catch (e) {
-		if (mintController?.signal.aborted) return;
-
-		steps[3] = STATUS.IDLE;
-		ElMessage.error("L2 synchronization timeout or error.");
-	}
-}
-
-// --- Watchers & Lifecycle ---
-watch(visible, (isOpen) => {
-	if (!isOpen) {
+// --- 7. Lifecycle ---
+watch(visible, (open) => {
+	if (!open) {
 		abortPending();
 		if (hasStateChanged.value) {
 			hasStateChanged.value = false;
@@ -460,7 +471,6 @@ watch(visible, (isOpen) => {
 });
 
 onUnmounted(abortPending);
-
 defineExpose({ show });
 </script>
 

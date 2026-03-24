@@ -28,17 +28,15 @@
 
 	<BridgeDialogL1 ref="dialogL1" @finish="onFinish" />
 	<BridgeDialogL2 ref="dialogL2" @finish="onFinish" />
+	<MigrationDialog ref="migrationDialog" @finish="onFinish" />
 	<FilterDialog ref="filterDialog" @apply="onFilterApply" />
 </template>
 
 <script setup>
-import { ethers } from "ethers";
 import { useStore } from 'vuex';
 import { ref, computed } from 'vue';
-// Constants
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 import { NETWORKS } from "@/config/networks.js";
-// Store / Services
 import { txList, syncing } from "@/app/store/txStore.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
 import { formatTokenAmount } from "@/infra/uitls/utils.js";
@@ -48,6 +46,7 @@ import ActivityHeader from '@/ui/components/ActivityHeader.vue';
 import ActivityItem from '@/ui/components/ActivityItem.vue';
 import BridgeDialogL1 from '@/ui/components/BridgeDialogL1.vue';
 import BridgeDialogL2 from '@/ui/components/BridgeDialogL2.vue';
+import MigrationDialog from '@/ui/components/MigrationDialog.vue';
 import FilterDialog from '@/ui/components/FilterDialog.vue';
 
 // Default filter config
@@ -64,6 +63,7 @@ const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
 const dialogL1 = ref();
 const dialogL2 = ref();
+const migrationDialog = ref(null);
 const filterDialog = ref();
 
 const filterConfig = ref({ ...DEFAULT_FILTER });
@@ -106,13 +106,18 @@ function openTx(tx) {
 		status: tx.status,
 		remainingSeconds: tx.remaining,
 		token: tx.tokenObj.token,
+		timestamp: tx.timestamp,
 		amount: formatTokenAmount(tx.amount, tx.tokenObj.contract.decimals)
 	};
 
 	if (tx.direction === BRIDGE_DIRECTION.L1_TO_L2) {
 		params.fromNetwork = NETWORKS[L1ChainId.value];
 		params.toNetwork = NETWORKS[L2ChainId.value];
-		dialogL1.value.show(params);
+		if (tx.type === 'CONVERT') {
+			migrationDialog.value.show(params);
+		} else {
+			dialogL1.value.show(params);
+		}
 	} else {
 		params.fromNetwork = NETWORKS[L2ChainId.value];
 		params.toNetwork = NETWORKS[L1ChainId.value];
