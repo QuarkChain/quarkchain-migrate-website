@@ -77,72 +77,53 @@ export async function waitForL2Mint(l2ChainId, userAddress, signal) {
 
 
 // batch query
-const PAGE_SIZE = 500;
-
 export async function queryL2MintStatuses(l2ChainId, userAddress, pendings, signal) {
     if (!pendings || pendings.length === 0) return new Map();
 
     // 1. get first time
     const earliestLimit = Math.min(...pendings.map(p => p.timestamp)) - 600;
 
-    const api = API_CONFIG[l2ChainId];
-    let page = 1;
+    const apiV2Base = API_CONFIG[l2ChainId].replace('/api', '/api/v2');
+
     let fetchedL2Txs = [];
-    let hasMore = true;
+    let nextParams = "";
     try {
         // 2. query tx
-        while (hasMore) {
+        while (true) {
             if (signal?.aborted) return;
 
-            const params = new URLSearchParams({
-                module: 'account',
-                action: 'txlist',
-                address: userAddress,
-                page: page.toString(),
-                offset: PAGE_SIZE.toString(),
-                sort: 'desc'
-            });
-            const response = await fetch(`${api}?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            const url = `${apiV2Base}/addresses/${userAddress}/transactions${nextParams ? '?' + nextParams : ''}`;
+            const response = await fetch(url, { signal });
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
             const data = await response.json();
-            const txs = data?.result;
-            // is finish
-            if (!Array.isArray(txs) || txs.length === 0) break;
+            const items = data?.items || [];
+            if (items.length === 0) break;
 
-            fetchedL2Txs = fetchedL2Txs.concat(txs);
-            const lastTxTimestamp = parseInt(txs[txs.length - 1].timeStamp);
+            fetchedL2Txs = fetchedL2Txs.concat(items);
+            const lastTxTs = Math.floor(new Date(items[items.length - 1].timestamp).getTime() / 1000);
             // is query all pending
-            if (lastTxTimestamp < earliestLimit || txs.length < PAGE_SIZE) {
-                hasMore = false;
-            } else {
-                page++;
+            if (lastTxTs < earliestLimit || !data.next_page_params) {
+                break;
             }
 
-            // too old
-            if (page > 20) break;
+            const p = data.next_page_params;
+            nextParams = `block_number=${p.block_number}&index=${p.index}&items_count=${p.items_count}`;
         }
 
         // 3. compare
         const resultMap = new Map();
         for (const p of pendings) {
             const matches = fetchedL2Txs.filter(l2 => {
+                const l2From = l2.from?.hash?.toLowerCase();
                 const isSameAmount = BigInt(l2.value) === BigInt(p.amount);
-                const l2Time = parseInt(l2.timeStamp);
+                const l2Time = Math.floor(new Date(l2.timestamp).getTime() / 1000);
                 const isTimingValid = l2Time >= (p.timestamp - 60) && l2Time <= (p.timestamp + 600);
-                return isSystemSender(l2.from.toLowerCase()) && isSameAmount && isTimingValid;
+                return isSystemSender(l2From) && isSameAmount && isTimingValid;
             });
-            let match = null;
             if (matches.length > 0) {
-                match = matches.reduce((closest, current) => {
-                    const closestDiff = Math.abs(parseInt(closest.timeStamp) - p.timestamp);
-                    const currentDiff = Math.abs(parseInt(current.timeStamp) - p.timestamp);
-                    return currentDiff < closestDiff ? current : closest;
-                });
+                resultMap.set(p.id, true);
             }
-            resultMap.set(p.id, match ? { hash: match.hash, timestamp: parseInt(match.timeStamp) } : null);
         }
         return resultMap;
     } catch (error) {

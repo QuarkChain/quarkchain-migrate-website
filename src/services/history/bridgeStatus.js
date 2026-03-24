@@ -113,9 +113,33 @@ export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL
 	await Promise.all(syncTasks);
 }
 
+const MIGRATION_FINALITY_THRESHOLD = 3 * 24 * 60 * 60;
+
 async function handleMigrationSync(l2ChainId, address, txs, signal) {
+	const now = Date.now();
+	const toQuery = [];
+	const autoCompleted = [];
+	txs.forEach(tx => {
+		const elapsed = now/1000 - tx.timestamp * 1000;
+		if (elapsed > MIGRATION_FINALITY_THRESHOLD) {
+			autoCompleted.push({
+				id: tx.id,
+				status: BRIDGE_STATUS.COMPLETED,
+				remaining: 0
+			});
+		} else {
+			// 3 days
+			toQuery.push(tx);
+		}
+	});
+	if (autoCompleted.length > 0) {
+		await saveTransactions(autoCompleted);
+	}
+
+	if (toQuery.length === 0) return;
+
 	try {
-		const resultMap = await queryL2MintStatuses(l2ChainId, address, txs, signal);
+		const resultMap = await queryL2MintStatuses(l2ChainId, address, toQuery, signal);
 		const updates = [];
 		for (const [id, result] of resultMap) {
 			if (result) {
