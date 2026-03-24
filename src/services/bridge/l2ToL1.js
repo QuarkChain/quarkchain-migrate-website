@@ -55,6 +55,7 @@ export async function checkProveStatus(l2TxHash, l1ChainId, l2ChainId) {
 	return {
 		canProve: timeToProve.seconds === 0,
 		seconds: timeToProve.seconds,
+		canDoTimestamp: timeToProve.timestamp,
 	};
 }
 
@@ -101,6 +102,7 @@ export async function checkFinalizeStatusByHash(l2TxHash, l1ChainId, l2ChainId, 
 	return {
 		canFinalize: timeToFinalize.seconds === 0,
 		seconds: timeToFinalize.seconds,
+		canDoTimestamp: timeToFinalize.timestamp,
 	};
 }
 

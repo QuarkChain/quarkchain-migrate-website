@@ -444,7 +444,6 @@ async function runStep2() {
 				timestamp: currentTimestamp,
 				blockNumber: receipt.blockNumber,
 				status: BRIDGE_STATUS.UNKNOWN,
-				remaining: 3 * 60
 			});
 			hasStateChanged.value = true;
 

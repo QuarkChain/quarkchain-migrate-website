@@ -70,6 +70,7 @@ async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal) {
 		} else if (finalize.seconds > 0) {
 			tx.status = BRIDGE_STATUS.CHALLENGE_PERIOD;
 			tx.remaining = finalize.seconds;
+			tx.canDoTimestamp = finalize.canDoTimestamp;
 		} else {
 			// can prove
 			const prove = await checkProveStatus(tx.hash, l1ChainId, l2ChainId);
@@ -79,6 +80,7 @@ async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal) {
 			} else {
 				tx.status = BRIDGE_STATUS.WAITING_PROVE_WINDOW;
 				tx.remaining = prove.seconds || 0;
+				tx.canDoTimestamp = prove.canDoTimestamp || 0;
 			}
 		}
 	} catch (e) {
@@ -189,18 +191,9 @@ async function handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicall, txs, si
 	// 3. update status
 	const updates = txs.map(tx => {
 		const status = statusMap[tx.id];
-		let remaining;
-		if (status === BRIDGE_STATUS.COMPLETED || status === BRIDGE_STATUS.FAILED) {
-			remaining = 0;
-		} else {
-			const EXPECTED_DURATION = 3 * 60;
-			const elapsed = Math.floor(Date.now() / 1000) - tx.timestamp;
-			remaining = Math.max(60, EXPECTED_DURATION - elapsed);
-		}
 		return {
 			id: tx.id,
 			status: status || tx.status,
-			remaining,
 			msgHash: tx.msgHash
 		};
 	});
@@ -208,11 +201,28 @@ async function handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicall, txs, si
 }
 
 async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, signal) {
-	const l1Provider = getL1Provider(l1ChainId);
+	const now = Math.floor(Date.now() / 1000);
+	const toSaveLocallyTxs = [];
+	const toQueryOnChainTxs = [];
+	// 0. local filter
+	txs.forEach(tx => {
+		if (tx.canDoTimestamp && now < (tx.canDoTimestamp - 120)) {
+			toSaveLocallyTxs.push({
+				id: tx.id,
+				remaining: Math.max(0, tx.canDoTimestamp - now)
+			});
+		} else {
+			toQueryOnChainTxs.push(tx);
+		}
+	});
+	if (toSaveLocallyTxs.length > 0) {
+		await saveTransactions(toSaveLocallyTxs);
+	}
+	if (toQueryOnChainTxs.length === 0) return;
 
 	// 1.get msgHash
 	const extractLimit = pLimit(3);
-	const extractTasks = txs.map(tx => extractLimit(async () => {
+	const extractTasks = toQueryOnChainTxs.map(tx => extractLimit(async () => {
 		if (!tx.msgHash) {
 			try {
 				const { withdrawal } = await extractWithdrawal(tx.hash, l2ChainId);
@@ -227,23 +237,24 @@ async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, si
 
 	throwIfAborted(signal);
 	// 2. multicall query Finalized
+	const l1Provider = getL1Provider(l1ChainId);
 	const finalizedMap = await batchCheckFinalized(
 			l1Provider,
 			bridge.L1OptimismPortalProxy,
 			multicall,
-			txs.filter(t => t.msgHash),
+			toQueryOnChainTxs.filter(t => t.msgHash),
 			signal
 	);
 
 	// 3. query item
 	const limit = pLimit(3);
-	const tasks = txs.map(tx => limit(async () => {
+	const tasks = toQueryOnChainTxs.map(tx => limit(async () => {
 		if (finalizedMap[tx.id]) {
 			await saveTransactions({ id: tx.id, status: BRIDGE_STATUS.COMPLETED, remaining: 0 });
 			return;
 		}
 		const latest = await getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal);
-		await saveTransactions({ id: tx.id, status: latest.status, remaining: latest.remaining });
+		await saveTransactions({ id: tx.id, status: latest.status, remaining: latest.remaining, canDoTimestamp: latest.canDoTimestamp });
 	}));
 	await Promise.all(tasks);
 }

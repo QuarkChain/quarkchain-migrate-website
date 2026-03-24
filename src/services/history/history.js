@@ -200,7 +200,7 @@ async function processBridgeLogs(logs, userAddress) {
 	}))).then(results => results.filter(r => r !== null));
 }
 
-export async function syncL2Withdrawals({ layer, chainId, bridgeAddr, userAddress, opts }) {
+async function syncL2Withdrawals({ layer, chainId, bridgeAddr, userAddress, opts }) {
 	const { signal, onChunk } = opts;
 	const apiUrl = API_CONFIG[chainId];
 	if (!apiUrl) return;
