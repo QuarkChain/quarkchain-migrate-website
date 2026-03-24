@@ -17,10 +17,11 @@ export function getCeiledTime(sec) {
 }
 
 export const formatTokenAmount = (amt, decimals, sigFigs = 4) => {
-	if (!amt || !decimals || amt === 0) return "0";
+	if (!amt || !decimals || amt === 0n || amt === "0") return "0";
 
-	const num = parseFloat(ethers.formatUnits(amt, decimals));
+	const formatted = ethers.formatUnits(amt, decimals);
+	const num = parseFloat(formatted);
 	if (num === 0) return "0";
 
-	return parseFloat(num.toPrecision(sigFigs)).toString();
+	return parseFloat(num.toFixed(sigFigs)).toString();
 };

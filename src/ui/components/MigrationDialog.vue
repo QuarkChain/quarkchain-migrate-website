@@ -28,7 +28,7 @@
 			<BridgeItemCard
 					:title="`Bridge from ${fromNetwork.name}`"
 					:networkIcon="fromNetwork.icon"
-					:addressUrl="fromNetwork.explorer + account"
+					:addressUrl="fromNetwork.explorer + '/address/' + account"
 					:address="account"
 					:amount="amount"
 					:tokenIcon="quarkIcon"
@@ -38,7 +38,7 @@
 			<BridgeItemCard
 					:title="`Get on ${toNetwork.name}`"
 					:networkIcon="toNetwork.icon"
-					:addressUrl="toNetwork.explorer + account"
+					:addressUrl="toNetwork.explorer + '/address/' + account"
 					:address="account"
 					:amount="amount"
 					:tokenIcon="quarkIcon"
@@ -299,10 +299,12 @@ async function show({ amount: am, mode: md = 'new', txHash, status, timestamp })
 
 	// reset & props
 	Object.assign(steps, { 1: STATUS.IDLE, 2: STATUS.DISABLED, 3: STATUS.DISABLED, 4: STATUS.DISABLED });
+	hasConfirmed.value = false;
 	mode.value = md;
 	amount.value = Number(am);
 	visible.value = true;
 	currentPage.value = isHistoryMode.value ? 2 : 1;
+	hasStateChanged.value = false;
 
 	if (isHistoryMode.value) {
 		handleHistoryTransition(txHash, status, timestamp);
@@ -425,7 +427,13 @@ async function startL2Watching(txHash, startTime) {
 
 		ElMessage.success("L2 tokens received!");
 	} catch (e) {
-		if (mintController?.signal.aborted) return;
+		const isAborted =
+				e.name === 'AbortError' ||
+				mintController?.signal.aborted;
+		if (isAborted || !visible.value) {
+			console.log("[Watcher] Silent exit after dialog hidden or aborted.");
+			return;
+		}
 
 		steps[3] = STATUS.IDLE;
 		ElMessage.error("L2 sync timeout. Please check later.");

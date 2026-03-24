@@ -31,7 +31,7 @@
 			<BridgeItemCard
 					:title="`Bridge from ${safeFromNetwork.name}`"
 					:networkIcon="safeFromNetwork.icon"
-					:addressUrl="safeFromNetwork.explorer + account"
+					:addressUrl="safeFromNetwork.explorer + '/address/' + account"
 					:address="account"
 					:amount="amount"
 					:tokenIcon="safeToken.icon"
@@ -41,7 +41,7 @@
 			<BridgeItemCard
 					:title="`Get on ${safeToNetwork.name}`"
 					:networkIcon="safeToNetwork.icon"
-					:addressUrl="safeToNetwork.explorer + account"
+					:addressUrl="safeToNetwork.explorer + '/address/' + account"
 					:address="account"
 					:amount="amount"
 					:tokenIcon="safeToken.icon"
