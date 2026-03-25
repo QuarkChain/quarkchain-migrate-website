@@ -201,15 +201,15 @@ async function handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicall, txs, si
 }
 
 async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, signal) {
-	const now = Math.floor(Date.now() / 1000);
+	const now = Math.floor(Date.now());
 	const toSaveLocallyTxs = [];
 	const toQueryOnChainTxs = [];
 	// 0. local filter
 	txs.forEach(tx => {
-		if (tx.canDoTimestamp && now < (tx.canDoTimestamp - 120)) {
+		if (tx.canDoTimestamp && now < (tx.canDoTimestamp - 120000)) {
 			toSaveLocallyTxs.push({
 				id: tx.id,
-				remaining: Math.max(0, tx.canDoTimestamp - now)
+				remaining: Math.max(0, (tx.canDoTimestamp - now) / 1000)
 			});
 		} else {
 			toQueryOnChainTxs.push(tx);
