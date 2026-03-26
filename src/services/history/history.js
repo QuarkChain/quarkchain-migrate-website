@@ -2,9 +2,8 @@ import pLimit from "p-limit";
 import { ethers } from "ethers";
 import { loadProgress, saveTransactions, updateProgress } from "./db.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS, API_CONFIG } from "@/config/constant.js";
-import { CONVERT_ABI, L1_BRIDGE_ABI } from "@/config/abi.js";
 import { getTokenConfig } from "@/config/tokens.js";
-import { getL2Provider } from "@/infra/provider/providerManager.js";
+import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
 
 
 const BRIDGE_DEPLOY_BLOCK = {
@@ -14,15 +13,7 @@ const BRIDGE_DEPLOY_BLOCK = {
 	'0x1adbb': 169841      // QKC Sepolia
 }
 
-const METHOD_IDS = {
-	CONVERT: "0xba00600a",    // convert(uint256)
-	L1_BRIDGE: "0x2567f814",  // depositERC20To(address,address,address,uint256,uint32,bytes)
-};
-
-const IFACES = {
-	CONVERT: new ethers.Interface(CONVERT_ABI),
-	L1_BRIDGE: new ethers.Interface(L1_BRIDGE_ABI),
-};
+const CONVERT_METHOD_IDS = "0xba00600a"; // convert(uint256)
 
 const MAX_HISTORY_DAYS = 180;
 const HALF_YEAR_MS = MAX_HISTORY_DAYS * 24 * 60 * 60 * 1000;
@@ -33,8 +24,8 @@ const BRIDGE_ABI = [
 const BRIDGE_IFACE = new ethers.Interface(BRIDGE_ABI);
 const BRIDGE_TOPIC = ethers.id("ERC20BridgeInitiated(address,address,address,address,uint256,bytes)");
 
+const L1_BLOCK_TIME = 12;
 const L2_BLOCK_TIME = 2;
-const HALF_YEAR_BLOCKS = Math.floor(HALF_YEAR_MS / 1000 / L2_BLOCK_TIME);
 
 function throwIfAborted(signal) {
 	if (signal?.aborted) {
@@ -45,15 +36,15 @@ function throwIfAborted(signal) {
 }
 
 // L1 use history
-async function fetchTxPageV2(apiUrl, address, nextPageParams = null) {
-	let url = `${apiUrl}/v2/addresses/${address}/transactions`;
+async function fetchTxPageV2(apiUrl, address, oQKC, nextPageParams = null) {
+	let url = `${apiUrl}/v2/addresses/${address}/token-transfers?type=ERC-20&token=${oQKC}`;
 
 	if (nextPageParams) {
 		const params = new URLSearchParams();
 		for (const [key, value] of Object.entries(nextPageParams)) {
 			params.append(key, value);
 		}
-		url = `${url}?${params.toString()}`;
+		url = `${url}&${params.toString()}`;
 	}
 
 	const response = await fetch(url);
@@ -69,7 +60,7 @@ const isMethod = (txMethod, targetId, targetName) => {
 	return m === targetId.toLowerCase() || m === targetName.toLowerCase();
 };
 
-async function syncAccountHistory({ layer, chainId, bridgeAddr, convertAddr, userAddress, opts }) {
+async function syncConvertTransfers({ layer, chainId, convertAddr, userAddress, opts }) {
 	const { signal, onChunk } = opts;
 	const apiUrl = API_CONFIG[chainId];
 	if (!apiUrl) return;
@@ -78,6 +69,8 @@ async function syncAccountHistory({ layer, chainId, bridgeAddr, convertAddr, use
 	const progress = await loadProgress(userAddress, layer);
 	const lastSyncedBlock = Math.max(progress.lastBlock || 0, BRIDGE_DEPLOY_BLOCK[chainId]);
 
+	const { address: oQKC } = getTokenConfig('QKC', chainId);
+
 	let nextPageParams = null;
 	let hasMore = true;
 	let lastProcessedBlock = lastSyncedBlock;
@@ -85,7 +78,7 @@ async function syncAccountHistory({ layer, chainId, bridgeAddr, convertAddr, use
 	while (hasMore) {
 		throwIfAborted(signal);
 
-		const { items, nextPage } = await fetchTxPageV2(apiUrl, userAddress, nextPageParams);
+		const { items, nextPage } = await fetchTxPageV2(apiUrl, userAddress, oQKC, nextPageParams);
 		if (!items || items.length === 0) break;
 
 		if (isFirstPage) {
@@ -107,29 +100,17 @@ async function syncAccountHistory({ layer, chainId, bridgeAddr, convertAddr, use
 				break;
 			}
 
-			const input = tx.raw_input?.toLowerCase() || "";
 			const toHash = tx.to?.hash?.toLowerCase();
 			const method = tx.method;
 			// decode
-			let parsed = null;
-			if (toHash === convertAddr.toLowerCase() && isMethod(method, METHOD_IDS.CONVERT, "convert")) {
-				try {
-					const decoded = IFACES.CONVERT.decodeFunctionData("convert", input);
-					const { address } = getTokenConfig('QKC', chainId);
-					parsed = { type: 'CONVERT', amount: decoded[0].toString(), token: address };
-				} catch (e) {}
-			} else if (toHash === bridgeAddr.toLowerCase() && isMethod(method, METHOD_IDS.L1_BRIDGE, "depositERC20To")) {
-				try {
-					const decoded = IFACES.L1_BRIDGE.decodeFunctionData("depositERC20To", input);
-					parsed = {type: 'BRIDGE', amount: decoded[3].toString(), token: decoded[0]};
-				} catch (e) {}
-			}
-
-			if (parsed) {
+			if (toHash === convertAddr.toLowerCase() && isMethod(method, CONVERT_METHOD_IDS, "convert")) {
+				const amount =  tx.total.value;
 				txsToSave.push({
-					...parsed,
-					id: tx.hash,
-					hash: tx.hash,
+					type: 'CONVERT',
+					amount: amount,
+					token: oQKC,
+					id: tx.transaction_hash,
+					hash: tx.transaction_hash,
 					blockNumber: bn,
 					timestamp: Math.floor(ts / 1000),
 					address: userAddress,
@@ -176,7 +157,7 @@ async function fetchLogsViaAPI(apiUrl, address, topic0, topic3, from, to) {
 	return data.status === "1" ? data.result : [];
 }
 
-async function processBridgeLogs(logs, userAddress) {
+async function processBridgeLogs(logs, userAddress, direction) {
 	const limit = pLimit(5);
 
 	return Promise.all(logs.map(log => limit(async () => {
@@ -186,7 +167,7 @@ async function processBridgeLogs(logs, userAddress) {
 				id: log.transactionHash,
 				hash: log.transactionHash,
 				type: 'BRIDGE',
-				direction: BRIDGE_DIRECTION.L2_TO_L1,
+				direction,
 				status: BRIDGE_STATUS.UNKNOWN,
 				address: userAddress,
 				blockNumber: parseInt(log.blockNumber, 16),
@@ -200,15 +181,19 @@ async function processBridgeLogs(logs, userAddress) {
 	}))).then(results => results.filter(r => r !== null));
 }
 
-async function syncL2Withdrawals({ layer, chainId, bridgeAddr, userAddress, opts }) {
+async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, direction, opts }) {
 	const { signal, onChunk } = opts;
 	const apiUrl = API_CONFIG[chainId];
 	if (!apiUrl) return;
 
 	// 1. load last block
-	const provider = getL2Provider(chainId);
+	const isL1ToL2 = direction === BRIDGE_DIRECTION.L1_TO_L2;
+	const blockTime = isL1ToL2 ?  L1_BLOCK_TIME : L2_BLOCK_TIME;
+	const HALF_YEAR_BLOCKS = Math.floor(HALF_YEAR_MS / 1000 / blockTime);
+
+	const provider = isL1ToL2 ? getL1Provider(chainId) : getL2Provider(chainId);
+	const latest = await provider.getBlockNumber();
 	const progress = await loadProgress(userAddress, layer);
-	let latest = await provider.getBlockNumber();
 	const halfYearAgoBlock = Math.max(0, latest - HALF_YEAR_BLOCKS);
 	let current = Math.max(
 			progress.lastBlock + 1,
@@ -227,7 +212,7 @@ async function syncL2Withdrawals({ layer, chainId, bridgeAddr, userAddress, opts
 		try {
 			let rawLogs = await fetchLogsViaAPI(apiUrl, bridgeAddr, BRIDGE_TOPIC, userTopic, current, to);
 			if (rawLogs.length > 0) {
-				const txs = await processBridgeLogs(rawLogs, userAddress);
+				const txs = await processBridgeLogs(rawLogs, userAddress, direction);
 				if (txs.length > 0) {
 					await saveTransactions(txs);
 					if (onChunk) onChunk({ count: txs.length, from: current, to });
@@ -246,18 +231,31 @@ async function syncL2Withdrawals({ layer, chainId, bridgeAddr, userAddress, opts
 export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, conversion, account, opts = {}) {
 	const { L1StandardBridge, L2StandardBridge } = bridge;
 	await Promise.all([
-		syncAccountHistory({
-			layer: "L1",
+		// 1. L1 Bridge (scan Logs)
+		syncBridgeLogs({
+			layer: "L1_BRIDGE",
 			chainId: l1ChainId,
 			bridgeAddr: L1StandardBridge,
-			convertAddr: conversion,
 			userAddress: account,
+			direction: BRIDGE_DIRECTION.L1_TO_L2,
 			opts
 		}),
-		syncL2Withdrawals({
-			layer: "L2",
+
+		// 2. L2 Bridge (scan Logs)
+		syncBridgeLogs({
+			layer: "L2_WITHDRAW",
 			chainId: l2ChainId,
 			bridgeAddr: L2StandardBridge,
+			userAddress: account,
+			direction: BRIDGE_DIRECTION.L2_TO_L1,
+			opts
+		}),
+
+		// 3. L1 Convert (Token Transfer API)
+		syncConvertTransfers({
+			layer: "L1_CONVERT",
+			chainId: l1ChainId,
+			convertAddr: conversion,
 			userAddress: account,
 			opts
 		})

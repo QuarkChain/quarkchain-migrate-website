@@ -82,7 +82,14 @@ async function runStatusPolling(account, session, signal) {
 		const bridge = store.getters.Bridge;
 		const multicallL1 = store.getters.MulticallL1;
 		const multicallL2 = store.getters.MulticallL2;
-		await syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL1, multicallL2, account, { signal });
+		await syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL1, multicallL2, account, 		{
+			signal,
+			onChunk: async () => {
+				if (isContextValid(account, session)) {
+					txList.value = await loadTransactions(account);
+				}
+			}
+		});
 	} catch (err) {
 		console.error("Poll status error:", err);
 	} finally {

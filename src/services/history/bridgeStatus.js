@@ -21,6 +21,10 @@ function throwIfAborted(signal) {
 	}
 }
 
+function refresh(onChunk) {
+	if(onChunk) onChunk({ refresh: true });
+}
+
 async function batchCheckFinalized(l1Provider, portalAddress, multicallAddress, txs, signal) {
 	const validTxs = txs.filter(tx => tx.msgHash);
 	if (validTxs.length === 0) return {};
@@ -90,7 +94,6 @@ async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal) {
 }
 
 export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL1, multicallL2, address, opts = {}) {
-	const { signal } = opts;
 	const allPendings = await loadPendingTransactions(address);
 	if (allPendings.length === 0) return;
 
@@ -104,26 +107,27 @@ export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL
 
 	const syncTasks = [];
 	if (migrationTxs.length > 0) {
-		syncTasks.push(handleMigrationSync(l2ChainId, address, migrationTxs, signal));
+		syncTasks.push(handleMigrationSync(l2ChainId, address, migrationTxs, opts));
 	}
 	if (l1ToL2BridgeTxs.length > 0) {
-		syncTasks.push(handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicallL2, l1ToL2BridgeTxs, signal));
+		syncTasks.push(handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicallL2, l1ToL2BridgeTxs, opts));
 	}
 	if (l2ToL1BridgeTxs.length > 0) {
-		syncTasks.push(handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicallL1, l2ToL1BridgeTxs, signal));
+		syncTasks.push(handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicallL1, l2ToL1BridgeTxs, opts));
 	}
 	await Promise.all(syncTasks);
 }
 
 const MIGRATION_FINALITY_THRESHOLD = 3 * 24 * 60 * 60;
 
-async function handleMigrationSync(l2ChainId, address, txs, signal) {
+async function handleMigrationSync(l2ChainId, address, txs, opts) {
+	const { signal, onChunk } = opts;
 	const now = Date.now();
 	const toQuery = [];
 	const autoCompleted = [];
 	txs.forEach(tx => {
-		const elapsed = now/1000 - tx.timestamp * 1000;
-		if (elapsed > MIGRATION_FINALITY_THRESHOLD) {
+		const elapsed = now / 1000 - tx.timestamp;
+		if (elapsed > MIGRATION_FINALITY_THRESHOLD) { // filter > 3 days
 			autoCompleted.push({
 				id: tx.id,
 				status: BRIDGE_STATUS.COMPLETED,
@@ -136,6 +140,7 @@ async function handleMigrationSync(l2ChainId, address, txs, signal) {
 	});
 	if (autoCompleted.length > 0) {
 		await saveTransactions(autoCompleted);
+		refresh(onChunk);
 	}
 
 	if (toQuery.length === 0) return;
@@ -154,13 +159,15 @@ async function handleMigrationSync(l2ChainId, address, txs, signal) {
 		}
 		if (updates.length > 0) {
 			await saveTransactions(updates);
+			refresh(onChunk);
 		}
 	} catch (e) {
 		console.error("Migration sync failed", e);
 	}
 }
 
-async function handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicall, txs, signal) {
+async function handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicall, txs, opts) {
+	const { signal, onChunk } = opts;
 	const l1Provider = getL1Provider(l1ChainId);
 	const l2Provider = getL2Provider(l2ChainId);
 
@@ -198,9 +205,11 @@ async function handleL1ToL2Sync(l1ChainId, l2ChainId, bridge, multicall, txs, si
 		};
 	});
 	await saveTransactions(updates);
+	refresh(onChunk);
 }
 
-async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, signal) {
+async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, opts) {
+	const { signal, onChunk } = opts;
 	const now = Math.floor(Date.now());
 	const toSaveLocallyTxs = [];
 	const toQueryOnChainTxs = [];
@@ -217,6 +226,7 @@ async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, si
 	});
 	if (toSaveLocallyTxs.length > 0) {
 		await saveTransactions(toSaveLocallyTxs);
+		refresh(onChunk);
 	}
 	if (toQueryOnChainTxs.length === 0) return;
 
@@ -257,4 +267,5 @@ async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, si
 		await saveTransactions({ id: tx.id, status: latest.status, remaining: latest.remaining, canDoTimestamp: latest.canDoTimestamp });
 	}));
 	await Promise.all(tasks);
+	refresh(onChunk);
 }
