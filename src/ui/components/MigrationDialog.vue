@@ -290,7 +290,7 @@ const isHistoryMode = computed(() => mode.value === 'history');
 
 // --- 4. Polling Hooks ---
 const gasPollingEnabled = computed(() => visible.value && !isHistoryMode.value && steps[2] !== STATUS.SUCCESS);
-usePolling(loadGasCost, 30000, gasPollingEnabled);
+usePolling(loadGasCost, 60000, gasPollingEnabled);
 
 // --- 5. Core Actions ---
 async function show({ amount: am, mode: md = 'new', txHash, status, timestamp }) {

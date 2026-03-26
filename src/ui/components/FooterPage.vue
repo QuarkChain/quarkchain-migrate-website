@@ -3,7 +3,6 @@
 		<div class="footer-b">
 			<div class="footer-b-text">BUILT BY QUARKCHAIN WITH ❤️️</div>
 			<div class="foot-img">
-				<span v-if="Conversion" class="foot-link" @click="goEtherscan">Contract</span>
 				<span class="foot-link" @click="goTwitter">Twitter</span>
 				<span class="foot-link" @click="goDiscord">Discord</span>
 			</div>
@@ -12,12 +11,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import { useStore } from 'vuex'
 
 const store = useStore()
-
-const Conversion = computed(() => store.state.chainConfig?.Conversion || null)
 
 function goTwitter() {
 	window.open('https://x.com/quark_chain', "_blank")
@@ -27,10 +23,6 @@ function goDiscord() {
 	window.open('https://discord.com/invite/GbkGhY3qkh', "_blank")
 }
 
-function goEtherscan() {
-	if (!Conversion.value) return
-	window.open(`https://etherscan.io/address/${Conversion.value}#code`, "_blank")
-}
 </script>
 
 <style scoped lang="less">

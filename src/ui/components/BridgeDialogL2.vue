@@ -450,7 +450,7 @@ let countdownTimerProve = null;
 let countdownTimerFinalize = null;
 
 const gasPollingEnabled = computed(() => visible.value && steps[5] !== STATUS.SUCCESS);
-usePolling(loadGasCost, 30000, gasPollingEnabled);
+usePolling(loadGasCost, 60000, gasPollingEnabled);
 
 const hasStateChanged = ref(false);
 

@@ -288,7 +288,7 @@ let controller = null;
 let historyTxHash = null;
 
 const gasPollingEnabled = computed(() => visible.value && !isHistoryMode.value && steps[2] !== STATUS.SUCCESS);
-usePolling(loadGasCost, 30000, gasPollingEnabled);
+usePolling(loadGasCost, 60000, gasPollingEnabled);
 
 function abortPending() {
 	if (controller) {

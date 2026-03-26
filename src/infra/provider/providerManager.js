@@ -25,7 +25,9 @@ export function getL1Provider(targetChainId) {
 		});
 	});
 
-	return new ethers.FallbackProvider(rpcConfigs);
+	return new ethers.FallbackProvider(rpcConfigs, parseInt(targetChainId, 16), {
+		quorum: 1
+	});
 }
 
 export function getL2Provider(targetChainId) {
