@@ -2,11 +2,12 @@ import pLimit from 'p-limit';
 import { ethers } from 'ethers';
 import { loadPendingTransactions, saveTransactions } from "@/services/history/db.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
+import { MUTILCALL_ABI } from "@/config/abi.js";
 import { queryL2MintStatuses } from "@/services/migration/nativeMigration.js";
 import { batchCheckL1ToL2Status, getL1ToL2MessageHash } from "@/services/bridge/l1ToL2.js";
 import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
+import { getPublicClientL1, getPublicClientL2 } from "@/infra/viem/clients.js";
 import {
-	checkFinalizeStatusByHash,
 	checkProveStatus,
 	extractWithdrawal
 } from "@/services/bridge/l2ToL1.js";
@@ -30,9 +31,7 @@ async function batchCheckFinalized(l1Provider, portalAddress, multicallAddress, 
 	if (validTxs.length === 0) return {};
 
 	const iface = new ethers.Interface(["function finalizedWithdrawals(bytes32) view returns (bool)"]);
-	const multicall = new ethers.Contract(multicallAddress, [
-		"function aggregate(tuple(address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)"
-	], l1Provider);
+	const multicall = new ethers.Contract(multicallAddress, MUTILCALL_ABI, l1Provider);
 
 	const results = {};
 	for (let i = 0; i < validTxs.length; i += MULTICALL_BATCH_SIZE) {
@@ -56,41 +55,46 @@ async function batchCheckFinalized(l1Provider, portalAddress, multicallAddress, 
 	return results;
 }
 
-async function getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal) {
-	throwIfAborted(signal);
+async function batchCheckProved(l1Provider, portalAddress, multicallAddress, txs, signal) {
+	const validTxs = txs.filter(tx => tx.msgHash);
+	if (validTxs.length === 0) return {};
 
-	// l2 to l1
-	try {
-		// can withdraw
-		let finalize = {canFinalize: false, seconds: 0};
+	const iface = new ethers.Interface(["function provenWithdrawals(bytes32 withdrawalHash, address proofSubmitter) view returns (address disputeGameProxy, uint64 timestamp)"]);
+	const multicall = new ethers.Contract(multicallAddress, MUTILCALL_ABI, l1Provider);
+
+	const results = {};
+	for (let i = 0; i < validTxs.length; i += MULTICALL_BATCH_SIZE) {
+		throwIfAborted(signal);
+
+		const batch = validTxs.slice(i, i + MULTICALL_BATCH_SIZE);
+		const calls = batch.map(tx => ({
+			target: portalAddress,
+			allowFailure: true,
+			callData: iface.encodeFunctionData("provenWithdrawals", [
+				tx.msgHash,
+				tx.address
+			])
+		}));
+
 		try {
-			finalize = await checkFinalizeStatusByHash(tx.hash, l1ChainId, l2ChainId, tx.msgHash);
+			const resultData = await multicall.aggregate3.staticCall(calls);
+			batch.forEach((tx, idx) => {
+				const { success, returnData } = resultData[idx];
+				if (success && returnData !== "0x") {
+					const [, timestamp] = iface.decodeFunctionResult("provenWithdrawals", returnData);
+					const ts = Number(timestamp);
+					if (ts > 0) {
+						results[tx.id] = { isProven: true, provenTimestamp: ts };
+					} else {
+						results[tx.id] = { isProven: false };
+					}
+				}
+			});
 		} catch (e) {
+			console.error("L2->L1 Proven Multicall failed", e);
 		}
-
-		if (finalize.canFinalize) {
-			tx.status = BRIDGE_STATUS.READY_TO_WITHDRAW;
-			tx.remaining = 0;
-		} else if (finalize.seconds > 0) {
-			tx.status = BRIDGE_STATUS.CHALLENGE_PERIOD;
-			tx.remaining = finalize.seconds;
-			tx.canDoTimestamp = finalize.canDoTimestamp;
-		} else {
-			// can prove
-			const prove = await checkProveStatus(tx.hash, l1ChainId, l2ChainId);
-			if (prove.canProve) {
-				tx.status = BRIDGE_STATUS.READY_TO_PROVE;
-				tx.remaining = 0;
-			} else {
-				tx.status = BRIDGE_STATUS.WAITING_PROVE_WINDOW;
-				tx.remaining = prove.seconds || 0;
-				tx.canDoTimestamp = prove.canDoTimestamp || 0;
-			}
-		}
-	} catch (e) {
-		console.warn("L2 to L1 status check failed", e);
 	}
-	return tx;
+	return results;
 }
 
 export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL1, multicallL2, address, opts = {}) {
@@ -235,8 +239,9 @@ async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, op
 	const extractTasks = toQueryOnChainTxs.map(tx => extractLimit(async () => {
 		if (!tx.msgHash) {
 			try {
-				const { withdrawal } = await extractWithdrawal(tx.hash, l2ChainId);
+				const { receipt, withdrawal } = await extractWithdrawal(tx.hash, l2ChainId);
 				tx.msgHash = withdrawal.withdrawalHash;
+				tx.receipt = receipt;
 				if (tx.msgHash) await saveTransactions({ id: tx.id, msgHash: tx.msgHash });
 			} catch (e) {
 				console.warn(`L2->L1 withdrawal error, Tx: ${tx.id}`, e);
@@ -245,27 +250,90 @@ async function handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicall, txs, op
 	}));
 	await Promise.all(extractTasks);
 
-	throwIfAborted(signal);
 	// 2. multicall query Finalized
+	throwIfAborted(signal);
 	const l1Provider = getL1Provider(l1ChainId);
 	const finalizedMap = await batchCheckFinalized(
 			l1Provider,
 			bridge.L1OptimismPortalProxy,
 			multicall,
-			toQueryOnChainTxs.filter(t => t.msgHash),
+			toQueryOnChainTxs,
 			signal
 	);
-
-	// 3. query item
-	const limit = pLimit(3);
-	const tasks = toQueryOnChainTxs.map(tx => limit(async () => {
+	const finalizedUpdates = [];
+	txs.forEach(tx => {
 		if (finalizedMap[tx.id]) {
-			await saveTransactions({ id: tx.id, status: BRIDGE_STATUS.COMPLETED, remaining: 0 });
+			finalizedUpdates.push({ id: tx.id, status: BRIDGE_STATUS.COMPLETED, remaining: 0 });
+		}
+	});
+	if (finalizedUpdates.length > 0) {
+		await saveTransactions(finalizedUpdates);
+		refresh(onChunk);
+	}
+
+	// 3. multicall query prove
+	throwIfAborted(signal);
+	const stillPending = txs.filter(tx => !finalizedMap[tx.id]);
+	if (stillPending.length === 0) return;
+	const provenStatusMap = await batchCheckProved(
+			l1Provider,
+			bridge.L1OptimismPortalProxy,
+			multicall,
+			stillPending,
+			signal
+	);
+	const portalContract = new ethers.Contract(bridge.L1OptimismPortalProxy, ["function proofMaturityDelaySeconds() view returns (uint256)"], l1Provider);
+	const CHALLENGE_PERIOD = await portalContract.proofMaturityDelaySeconds()
+			.then(v => Number(v))
+			.catch(() => 604800);
+	// 3.1 filter
+	const provenUpdates = [];
+	stillPending.forEach(tx => {
+		const pInfo = provenStatusMap[tx.id]; // { isProven: true, provenTimestamp: 123... }
+		if (pInfo?.isProven) {
+			const canWithdrawTime = (pInfo.provenTimestamp + CHALLENGE_PERIOD) * 1000;
+			const isReady = now > canWithdrawTime;
+			provenUpdates.push({
+				id: tx.id,
+				status: isReady ? BRIDGE_STATUS.READY_TO_WITHDRAW : BRIDGE_STATUS.CHALLENGE_PERIOD,
+				remaining: Math.max(0, (canWithdrawTime - now) / 1000),
+				canDoTimestamp: canWithdrawTime
+			});
+		}
+	});
+	if (provenUpdates.length > 0) {
+		await saveTransactions(provenUpdates);
+		refresh(onChunk);
+	}
+
+	// 4. query prove item
+	throwIfAborted(signal);
+	const unprovenTxs = stillPending.filter(tx => !provenStatusMap[tx.id]?.isProven);
+	if (unprovenTxs.length === 0) return;
+	// 4.1. query item
+	const limit = pLimit(3);
+	const pL1 = getPublicClientL1(l1ChainId);
+	const pL2 = getPublicClientL2(l2ChainId);
+	const tasks = unprovenTxs.map(tx => limit(async () => {
+		if (tx.status === BRIDGE_STATUS.READY_TO_PROVE) {
 			return;
 		}
-		const latest = await getLatestStatus(l1ChainId, l2ChainId, bridge, tx, signal);
-		await saveTransactions({ id: tx.id, status: latest.status, remaining: latest.remaining, canDoTimestamp: latest.canDoTimestamp });
+
+		try {
+			const proveInfo = await checkProveStatus(tx.hash, l1ChainId, l2ChainId, {
+				pL1, pL2, receipt: tx.receipt
+			});
+			const updateData = {
+				id: tx.id,
+				status: proveInfo.canProve ? BRIDGE_STATUS.READY_TO_PROVE : BRIDGE_STATUS.WAITING_PROVE_WINDOW,
+				remaining: proveInfo.seconds || 0,
+				canDoTimestamp: proveInfo.canDoTimestamp || 0
+			};
+			await saveTransactions(updateData);
+			refresh(onChunk);
+		} catch (e) {
+			console.warn("L2->L1 Sample Prove Check Failed", e);
+		}
 	}));
 	await Promise.all(tasks);
-	refresh(onChunk);
 }

@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import { getL1Provider, getL2Provider, getSigner } from "@/infra/provider/providerManager.js";
 import { approve, getAllowance } from "@/infra/erc20/erc20.js";
-import { L1_BRIDGE_ABI, L1_MESSENGER_ABI, L2_MESSENGER_ABI } from "@/config/abi.js";
+import { L1_BRIDGE_ABI, L1_MESSENGER_ABI, L2_MESSENGER_ABI, MUTILCALL_ABI } from "@/config/abi.js";
 import { BRIDGE_STATUS } from "@/config/constant.js";
 
 export async function getGasPrice(L1ChainId) {
@@ -99,9 +99,7 @@ export async function batchCheckL1ToL2Status(l2Provider, messengerAddress, multi
 	const validTxs = txs.filter(tx => tx.msgHash);
 	if (validTxs.length === 0) return {};
 
-	const multicall = new ethers.Contract(multicallAddress, [
-		"function aggregate(tuple(address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)"
-	], l2Provider);
+	const multicall = new ethers.Contract(multicallAddress, MUTILCALL_ABI, l2Provider);
 
 	const iface = new ethers.Interface(L2_MESSENGER_ABI);
 	const results = {};

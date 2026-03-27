@@ -37,21 +37,26 @@ export async function bridgeTokenToL1(L2ChainId, bridgeAddress, l2Token, to, amo
 
 
 // l2 send
-export async function extractWithdrawal(l2TxHash, l2ChainId) {
-	const pL2 = getPublicClientL2(l2ChainId);
+export async function extractWithdrawal(l2TxHash, l2ChainId, p2Client = null) {
+	const pL2 = p2Client || getPublicClientL2(l2ChainId);
 	const receipt = await pL2.getTransactionReceipt({ hash: l2TxHash });
 	const [withdrawal] = getWithdrawals(receipt);
 	return { pL2, receipt, withdrawal };
 }
 
-export async function checkProveStatus(l2TxHash, l1ChainId, l2ChainId) {
-	const { pL2, receipt } = await extractWithdrawal(l2TxHash, l2ChainId);
-	const pL1 = getPublicClientL1(l1ChainId);
+export async function checkProveStatus(l2TxHash, l1ChainId, l2ChainId, context = {}) {
+	const pL1 = context.pL1 || getPublicClientL1(l1ChainId);
+	const pL2 = context.pL2 || getPublicClientL2(l2ChainId);
+	let receipt = context.receipt;
+	if (!receipt) {
+		const res = await extractWithdrawal(l2TxHash, l2ChainId, pL2);
+		receipt = res.receipt;
+	}
+
 	const timeToProve = await pL1.getTimeToProve({
 		receipt,
 		targetChain: pL2.chain,
 	});
-
 	return {
 		canProve: timeToProve.seconds === 0,
 		seconds: timeToProve.seconds,
@@ -88,21 +93,6 @@ export async function checkFinalizeStatus(l2TxHash, l1ChainId, l2ChainId) {
 		canFinalize: timeToFinalize.seconds === 0,
 		seconds: timeToFinalize.seconds,
 		timestamp: timeToFinalize.timestamp,
-	};
-}
-
-export async function checkFinalizeStatusByHash(l2TxHash, l1ChainId, l2ChainId, msgHash) {
-	const pL1 = getPublicClientL1(l1ChainId);
-	const pL2 = getPublicClientL2(l2ChainId);
-	const timeToFinalize = await pL1.getTimeToFinalize({
-		withdrawalHash: msgHash,
-		targetChain: pL2.chain,
-	});
-
-	return {
-		canFinalize: timeToFinalize.seconds === 0,
-		seconds: timeToFinalize.seconds,
-		canDoTimestamp: timeToFinalize.timestamp,
 	};
 }
 

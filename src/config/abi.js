@@ -28,3 +28,9 @@ export const L2_MESSENGER_ABI = [
 	"function successfulMessages(bytes32) view returns (bool)",
 	"function failedMessages(bytes32) view returns (bool)"
 ];
+
+// mutilcall
+export const MUTILCALL_ABI = [
+	"function aggregate(tuple(address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)",
+	"function aggregate3((address target, bool allowFailure, bytes callData)[] calls) public payable returns ((bool success, bytes returnData)[] returnData)"
+];
