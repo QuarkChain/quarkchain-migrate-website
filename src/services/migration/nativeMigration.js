@@ -52,6 +52,9 @@ export async function waitForL2Mint(l2ChainId, userAddress, targetAmount, startT
                 return true;
             }
         } catch (e) {
+            if (e.name === 'AbortError' || e.message === "Polling aborted") {
+                return;
+            }
             console.error("[L2 Watcher] API error, retrying...", e);
         }
 
@@ -111,6 +114,9 @@ export async function queryL2MintStatuses(l2ChainId, userAddress, pendings, sign
         }
         return resultMap;
     } catch (error) {
+        if (error.name === 'AbortError') {
+            throw error;
+        }
         console.error("Query L2 Status Failed:", error);
         throw error;
     }
