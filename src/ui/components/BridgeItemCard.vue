@@ -113,4 +113,34 @@ const shortAddress = computed(() => {
 	font-weight: 600;
 	color: black;
 }
+
+@media screen and (max-width: 500px) {
+	.bridge-wrapper {
+		gap: 8px;
+		padding: 12px 16px;
+	}
+
+	.card-header {
+		gap: 8px;
+	}
+	.network-icon {
+		width: 18px;
+		height: 18px;
+	}
+	.title {
+		font-size: 12px;
+		text-align: left;
+	}
+
+	.amount-row {
+		gap: 8px;
+	}
+	.token-icon {
+		width: 25px;
+		height: 25px;
+	}
+	.amount {
+		font-size: 18px;
+	}
+}
 </style>

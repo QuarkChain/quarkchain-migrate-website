@@ -2,7 +2,7 @@
 	<el-dialog
 			:model-value="visible"
 			:show-close="false"
-			class="bridge-dialog"
+			class="bridge-dialog1"
 			@close="visible = false"
 	>
 		<div class="dialog-header">
@@ -696,6 +696,7 @@ defineExpose({show})
 					font-size: 14px;
 					font-weight: 580;
 					color: black;
+					text-align: left;
 					font-family: CoinbaseDisplay;
 				}
 
@@ -814,64 +815,70 @@ defineExpose({show})
 
 @media screen and (max-width: 500px) {
 	.dialog-header {
-		margin-top: -40px;
-
-		.dialog-title {
-			font-size: 16px;
-		}
-
-		.close-btn {
-			font-size: 16px;
-			width: 24px;
-			height: 24px;
+		.icon-btn {
+			width: 34px;
+			height: 34px;
+			font-size: 18px;
 		}
 	}
 
-	.step-column {
-		margin-top: 25px;
-		gap: 15px;
-	}
 
-	.step-label-layout {
-		.step-icon {
-			width: 1.8rem;
-			height: 1.8rem;
-			border-radius: 10px;
+	.page-container {
+		gap: 12px;
+		padding: 0;
+
+		.page-container-title {
+			font-size: 28px;
 		}
 
-		.step-label {
-			font-size: 13px;
+		.review-btn-row {
+			margin-top: 0;
+			width: 100%;
+
+			.review-btn {
+				height: 45px;
+				font-size: 14px;
+			}
 		}
-	}
 
-	.convert-button {
-		width: 25%;
-		font-size: 12px;
-		line-height: 12px;
-		padding-left: 0;
-		padding-right: 0;
-	}
+		.token-header {
+			text-align: center;
+			padding: 20px 0 0;
 
-	.wait-loading {
-		font-size: 18px;
-	}
+			.token-logo {
+				width: 38px;
+				height: 38px;
+			}
 
-	.wait-finish {
-		font-size: 18px;
+			.token-title {
+				margin-top: 0;
+				font-size: 24px;
+			}
+		}
+
+		.steps-container {
+			gap: 10px;
+			padding: 0;
+
+			.step-card {
+				padding: 14px;
+			}
+		}
 	}
 }
 </style>
 
 <style>
-.bridge-dialog {
+.bridge-dialog1 {
 	border-radius: 8px !important;
 	max-width: 500px !important;
 	padding: 10px 25px 30px !important;
 }
 
 @media screen and (max-width: 500px) {
-	.bridge-dialog {
+	.bridge-dialog1 {
 		width: 95% !important;
+		padding: 0px 15px 20px !important;
 	}
 }
 </style>

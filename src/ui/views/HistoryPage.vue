@@ -187,6 +187,14 @@ function onFilterApply(newConfig) {
 		color:#64748b;
 	}
 }
+
+@media screen and (max-width: 500px) {
+	.list-container {
+		max-width: 90%;
+		margin: 25px auto 0;
+		padding: 0;
+	}
+}
 </style>
 
 <style>
@@ -198,7 +206,6 @@ function onFilterApply(newConfig) {
 	padding: 0;
 	height: 100%;
 }
-
 .history-dialog .el-dialog__header {
 	position: fixed;
 	top: 0;
@@ -231,5 +238,12 @@ function onFilterApply(newConfig) {
 }
 .history-dialog .el-dialog__headerbtn:hover .el-dialog__close {
 	color: #1e293b !important;
+}
+
+@media screen and (max-width: 500px) {
+	.history-dialog .el-dialog__headerbtn {
+		top: 18px !important;
+		right: 0 !important;
+	}
 }
 </style>

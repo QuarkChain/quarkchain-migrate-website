@@ -95,4 +95,23 @@ const shortAddress = computed(() => {
 	height: 20px;
 	fill: currentColor;
 }
+
+@media screen and (max-width: 500px) {
+	.activity-header {
+		gap: 12px;
+	}
+
+	.header-capsule {
+		gap: 12px;
+		padding: 8px 12px 8px 18px;
+	}
+	.header-title {
+		font-size: 18px;
+	}
+
+	.filter-btn {
+		width: 44px;
+		height: 44px;
+	}
+}
 </style>

@@ -1123,6 +1123,7 @@ defineExpose({ show });
 					font-size: 14px;
 					font-weight: 580;
 					color: black;
+					text-align: left;
 					font-family: CoinbaseDisplay;
 				}
 
@@ -1286,50 +1287,96 @@ defineExpose({ show });
 
 @media screen and (max-width: 500px) {
 	.dialog-header {
-		margin-top: -40px;
-
-		.dialog-title {
-			font-size: 16px;
-		}
-
-		.close-btn {
-			font-size: 16px;
-			width: 24px;
-			height: 24px;
+		.icon-btn {
+			width: 34px;
+			height: 34px;
+			font-size: 18px;
 		}
 	}
 
-	.step-column {
-		margin-top: 25px;
-		gap: 15px;
-	}
 
-	.step-label-layout {
-		.step-icon {
-			width: 1.8rem;
-			height: 1.8rem;
-			border-radius: 10px;
+	.page-container {
+		gap: 12px;
+		padding: 0;
+
+		.page-container-title {
+			font-size: 28px;
 		}
 
-		.step-label {
-			font-size: 13px;
+		.review-btn-row {
+			margin-top: 0;
+			width: 100%;
+
+			.review-btn {
+				height: 45px;
+				font-size: 14px;
+			}
 		}
-	}
 
-	.convert-button {
-		width: 25%;
-		font-size: 12px;
-		line-height: 12px;
-		padding-left: 0;
-		padding-right: 0;
-	}
+		.checks-container {
+			margin: 0;
 
-	.wait-loading {
-		font-size: 18px;
-	}
+			.checks-title {
+				margin-top: -5px;
+				font-size: 13px;
+				margin-bottom: 8px;
+			}
+			.custom-checkbox :deep(.el-checkbox__label) {
+				font-size: 12px;
+				padding-left: 12px;
+			}
+		}
 
-	.wait-finish {
-		font-size: 18px;
+		.token-header {
+			text-align: center;
+			padding: 20px 0 0;
+
+			.token-logo {
+				width: 38px;
+				height: 38px;
+			}
+
+			.token-title {
+				margin-top: 0;
+				font-size: 24px;
+			}
+		}
+
+		.steps-container {
+			.step-card {
+				padding: 14px;
+			}
+
+			.step-left {
+				gap: 10px;
+
+				.step-icon {
+					width: 30px;
+					height: 30px;
+				}
+
+				.step-text {
+					.step-title {
+						font-size: 12px;
+					}
+				}
+			}
+
+			.step-right {
+				.right-btn {
+					font-size: 13px;
+				}
+			}
+		}
+
+		.custom-icon-box {
+			width: 60px;
+			height: 60px;
+
+			.icon-badge {
+				font-size: 30px;
+			}
+		}
 	}
 }
 </style>
@@ -1344,6 +1391,7 @@ defineExpose({ show });
 @media screen and (max-width: 500px) {
 	.bridge-dialog {
 		width: 95% !important;
+		padding: 0 15px 20px !important;
 	}
 }
 </style>

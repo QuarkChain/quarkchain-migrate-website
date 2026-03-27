@@ -51,14 +51,5 @@ import Footer from '@/ui/components/FooterPage.vue'
 		height: 64px !important;
 		padding: 5px 15px !important;
 	}
-
-	.full-height {
-		min-height: auto;
-	}
-	.main-content {
-		flex: unset;
-		height: auto;
-		overflow: visible;
-	}
 }
 </style>

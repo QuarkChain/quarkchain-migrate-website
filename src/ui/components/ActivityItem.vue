@@ -448,4 +448,73 @@ const handleCardClick = () => {
 		}
 	}
 }
+
+@media screen and (max-width: 500px) {
+	.activity-item-container {
+		margin-bottom: 14px;
+	}
+
+	.activity-card {
+		padding: 18px;
+		border-radius: 18px;
+	}
+
+	.asset-info {
+		gap: 12px;
+		padding: 14px 0;
+
+		.token-icon {
+			width: 30px;
+			height: 30px;
+		}
+
+		.amount-group {
+			.amount-value {
+				font-size: 20px;
+			}
+			.amount-symbol {
+				font-size: 16px;
+			}
+		}
+	}
+
+	.card-footer {
+		.step-bar {
+			height: 5px;
+		}
+
+		.status-action-row {
+			.status-chip {
+				gap: 8px;
+				padding: 5px 12px;
+
+				.spinner-svg {
+					width: 15px;
+					height: 15px;
+				}
+
+				.status-success {
+					width: 17px;
+					height: 17px;
+				}
+				.status-failed {
+					width: 17px;
+					height: 17px;
+				}
+				.status-label {
+					font-size: 12px;
+				}
+			}
+
+			.item-btn {
+				padding: 7px 12px;
+			}
+
+			.countdown-badge {
+				padding: 6px 12px;
+				font-size: 12px;
+			}
+		}
+	}
+}
 </style>
