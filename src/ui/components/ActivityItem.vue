@@ -66,7 +66,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { TOKEN_LIST } from "@/config/tokens.js";
+import { TOKEN_LIST } from "@/config/tokens.ts";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS } from "@/config/constant.js";
 import { formatTokenAmount, getCeiledTime } from "@/infra/uitls/utils.js";
 import ethereumIcon from '@/assets/l1.svg'

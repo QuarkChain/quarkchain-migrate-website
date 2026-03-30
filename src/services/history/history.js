@@ -2,7 +2,7 @@ import pLimit from "p-limit";
 import { ethers } from "ethers";
 import { loadProgress, saveTransactions, updateProgress } from "./db.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS, API_CONFIG } from "@/config/constant.js";
-import { getTokenConfig } from "@/config/tokens.js";
+import { getTokenConfig } from "@/config/tokens.ts";
 import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
 
 

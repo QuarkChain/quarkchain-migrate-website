@@ -106,7 +106,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { Switch, Loading } from '@element-plus/icons-vue'
 import { useStore } from 'vuex';
-import { TOKEN_LIST } from "@/config/tokens.js";
+import { TOKEN_LIST } from "@/config/tokens.ts";
 import { NETWORKS } from "@/config/networks.js";
 import { hasAction } from "@/app/store/txStore.js";
 import { getErc20BalanceByL1, getErc20BalanceByL2, getQKCBalanceByL2 } from "@/services/bridge/balanceService.js";
