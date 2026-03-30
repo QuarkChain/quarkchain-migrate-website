@@ -119,7 +119,16 @@ export async function syncPendingStatus(l1ChainId, l2ChainId, bridge, multicallL
 	if (l2ToL1BridgeTxs.length > 0) {
 		syncTasks.push(handleL2ToL1Sync(l1ChainId, l2ChainId, bridge, multicallL1, l2ToL1BridgeTxs, opts));
 	}
-	await Promise.all(syncTasks);
+
+	try {
+		await Promise.all(syncTasks);
+	} catch (err) {
+		if (err.name === 'AbortError') {
+			console.log("Polling stopped by user.");
+			return;
+		}
+		console.error("Poll status error:", err);
+	}
 }
 
 const MIGRATION_FINALITY_THRESHOLD = 3 * 24 * 60 * 60;

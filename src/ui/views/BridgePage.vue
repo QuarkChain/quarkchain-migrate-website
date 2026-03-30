@@ -108,9 +108,9 @@ import { Switch, Loading } from '@element-plus/icons-vue'
 import { useStore } from 'vuex';
 import { TOKEN_LIST } from "@/config/tokens.js";
 import { NETWORKS } from "@/config/networks.js";
+import { hasAction } from "@/app/store/txStore.js";
 import { getErc20BalanceByL1, getErc20BalanceByL2, getQKCBalanceByL2 } from "@/services/bridge/balanceService.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
-import { loadPendingTransactions } from "@/services/history/db.js";
 import { formatTokenAmount } from "@/infra/uitls/utils.js";
 
 // Components
@@ -127,7 +127,6 @@ const L1ChainId = computed(() => store.state.l1ChainId.toLowerCase());
 const L2ChainId = computed(() => store.state.l2ChainId.toLowerCase());
 
 // --- UI State ---
-const hasAction = ref(false);
 const showHistory = ref(false);
 const isL1ToL2 = ref(true); // true: L1->L2, false: L2->L1
 const amount = ref('');
@@ -176,14 +175,16 @@ const buttonText = computed(() => {
 });
 
 // --- Methods ---
-async function fetchBalance() {
+async function fetchBalance(isSilent = false) {
 	if (!account.value || !currentTokenContract.value) {
 		balance.value = '0.0000';
 		return;
 	}
-	isBalanceLoading.value = true;
+
+	if (!isSilent) isBalanceLoading.value = true;
 	try {
 		const { address, decimals } = currentTokenContract.value;
+		const currentAccount = account.value;
 		let rawBalance;
 		if (isL1ToL2.value) {
 			rawBalance = await getErc20BalanceByL1(L1ChainId.value, address, account.value);
@@ -192,12 +193,14 @@ async function fetchBalance() {
 					? await getQKCBalanceByL2(L2ChainId.value, account.value)
 					: await getErc20BalanceByL2(L2ChainId.value, address, account.value);
 		}
-		balance.value = formatTokenAmount(rawBalance, decimals);
+		if (currentAccount === account.value) {
+			balance.value = formatTokenAmount(rawBalance, decimals);
+		}
 	} catch (e) {
 		console.error("Fetch balance failed:", e);
-		balance.value = '0.0000';
+		if (!isSilent) balance.value = '0.0000';
 	} finally {
-		isBalanceLoading.value = false;
+		if (!isSilent) isBalanceLoading.value = false;
 	}
 }
 
@@ -228,12 +231,10 @@ function handleBridge() {
 	}
 }
 
-async function syncAndCheckActions() {
+async function syncHistory() {
 	if (!account.value) return;
 	try {
 		await refreshLocalList();
-		const pendingTxs = await loadPendingTransactions(account.value);
-		hasAction.value = pendingTxs.length > 0;
 	} catch (e) {
 		console.error("Sync actions failed:", e);
 	}
@@ -241,7 +242,7 @@ async function syncAndCheckActions() {
 
 async function onFinish() {
 	await fetchBalance();
-	await syncAndCheckActions();
+	await syncHistory();
 }
 
 function handleActionClick() {
@@ -249,13 +250,14 @@ function handleActionClick() {
 }
 
 // --- Watchers & Lifecycle ---
-watch([selectedTokenSymbol, isL1ToL2], fetchBalance, { immediate: true });
-
+watch([selectedTokenSymbol, isL1ToL2], () => {
+	fetchBalance(false);
+}, { immediate: true });
 watch([account], async () => {
 	if (!account.value) return;
 
 	await fetchBalance();
-	await syncAndCheckActions();
+	await syncHistory();
 }, { immediate: true });
 
 watch(isMigration, (newVal) => {
@@ -267,7 +269,9 @@ watch(isMigration, (newVal) => {
 
 let timer;
 onMounted(() => {
-	timer = setInterval(fetchBalance, 30000);
+	timer = setInterval(() => {
+		fetchBalance(true);
+	}, 30000);
 });
 onBeforeUnmount(() => {
 	clearInterval(timer);

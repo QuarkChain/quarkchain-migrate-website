@@ -1,5 +1,5 @@
 import { openDB } from "idb";
-import { BRIDGE_STATUS } from "@/config/constant.js";
+import { BRIDGE_STATUS, BRIDGE_STATUS_PRIORITY } from "@/config/constant.js";
 
 const DB_NAME = "BridgeHistoryDB";
 const TX_STORE = "transactions";
@@ -37,7 +37,17 @@ export async function saveTransactions(data) {
 
 		const existing = await store.get(newItem.id);
 		if (existing) {
-			await store.put({ ...existing, ...newItem });
+			const oldPriority = BRIDGE_STATUS_PRIORITY[existing.status] || 0;
+			const newPriority = BRIDGE_STATUS_PRIORITY[newItem.status] || 0;
+			if (newPriority < oldPriority) {
+				await store.put({
+					...existing,
+					...newItem,
+					status: existing.status
+				});
+			} else {
+				await store.put({ ...existing, ...newItem });
+			}
 		} else {
 			await store.put(newItem);
 		}
