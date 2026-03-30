@@ -3,10 +3,10 @@ export const CONTRACTS = {
 		Conversion: '0x47e2609C842a12c395623298114587C616e142c3',
 		OldToken: '0xEA26c4aC16D4a5A106820BC8AEE85fd0b7b2b664',
 		Bridge: {
-			L1StandardBridge: '',    // L1StandardBridgeProxy
-			L1CrossDomainMessengerProxy: '',
-			L1DisputeGameFactoryProxy: '',
-			L1OptimismPortalProxy: '',
+			L1StandardBridge: '0x326798c62fc0d7281f3840e08226a671aa949e98',    // L1StandardBridgeProxy
+			L1CrossDomainMessengerProxy: '0x3137f7b40e58d9babb62f63924314ef037c400cb',
+			L1DisputeGameFactoryProxy: '0x61870a40eaa988515060e91e39da9c4a690b5c9b',
+			L1OptimismPortalProxy: '0xf9ea3f50acbacb122bfb9ceb6cf79c6cfcf35c7a',
 
 			L2StandardBridge: '0x4200000000000000000000000000000000000010',
 			L2CrossDomainMessenger: '0x4200000000000000000000000000000000000007',

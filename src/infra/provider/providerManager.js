@@ -17,16 +17,17 @@ export function getL1Provider(targetChainId) {
 	}
 
 	const rpcPool = NETWORKS[targetChainId]?.rpcUrls || [];
-	rpcPool.forEach((url) => {
+	rpcPool.forEach((url, index) => {
 		rpcConfigs.push({
 			provider: new ethers.JsonRpcProvider(url, chainIdNum, { staticNetwork: true }),
-			priority: 1,
-			stallTimeout: 2000
+			priority: index + 1,
+			stallTimeout: 2000 + (index * 1000),
 		});
 	});
 
 	return new ethers.FallbackProvider(rpcConfigs, parseInt(targetChainId, 16), {
-		quorum: 1
+		quorum: 1,
+		cacheTimeout: 15000
 	});
 }
 

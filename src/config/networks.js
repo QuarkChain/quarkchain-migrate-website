@@ -8,11 +8,10 @@ export const NETWORKS = {
 		name: 'Ethereum',
 		icon: ethereumIcon,
 		rpcUrls: [
-			'https://ethereum.publicnode.com',
-			'https://eth.merkle.io',
 			'https://rpc.ankr.com/eth',
-			'https://eth.llamarpc.com',
-			'https://1rpc.io/eth'
+			'https://ethereum.publicnode.com',
+			'https://cloudflare-eth.com',
+			'https://eth.merkle.io',
 		],
 		explorer: 'https://etherscan.io',
 		nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
