@@ -70,6 +70,7 @@ async function syncConvertTransfers({ layer, chainId, convertAddr, userAddress, 
 	const lastSyncedBlock = Math.max(progress.lastBlock || 0, BRIDGE_DEPLOY_BLOCK[chainId]);
 
 	const { address: oQKC } = getTokenConfig('QKC', chainId);
+	const convertAddrLower = convertAddr.toLowerCase();
 
 	let nextPageParams = null;
 	let hasMore = true;
@@ -100,14 +101,11 @@ async function syncConvertTransfers({ layer, chainId, convertAddr, userAddress, 
 				break;
 			}
 
-			const toHash = tx.to?.hash?.toLowerCase();
-			const method = tx.method;
 			// decode
-			if (toHash === convertAddr.toLowerCase() && isMethod(method, CONVERT_METHOD_IDS, "convert")) {
-				const amount =  tx.total.value;
+			if (tx.to?.hash?.toLowerCase() === convertAddrLower && isMethod(tx.method, CONVERT_METHOD_IDS, "convert")) {
 				txsToSave.push({
 					type: 'CONVERT',
-					amount: amount,
+					amount: tx.total.value,
 					token: oQKC,
 					id: tx.transaction_hash,
 					hash: tx.transaction_hash,
@@ -157,10 +155,8 @@ async function fetchLogsViaAPI(apiUrl, address, topic0, topic3, from, to) {
 	return data.status === "1" ? data.result : [];
 }
 
-async function processBridgeLogs(logs, userAddress, direction) {
-	const limit = pLimit(5);
-
-	return Promise.all(logs.map(log => limit(async () => {
+function processBridgeLogs(logs, userAddress, direction) {
+	return logs.map(log => {
 		try {
 			const parsed = BRIDGE_IFACE.parseLog({ data: log.data, topics: log.topics });
 			return {
@@ -178,7 +174,7 @@ async function processBridgeLogs(logs, userAddress, direction) {
 		} catch (e) {
 			return null;
 		}
-	}))).then(results => results.filter(r => r !== null));
+	}).filter(r => r !== null);
 }
 
 async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, direction, opts }) {
@@ -188,31 +184,38 @@ async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, directi
 
 	// 1. load last block
 	const isL1ToL2 = direction === BRIDGE_DIRECTION.L1_TO_L2;
-	const blockTime = isL1ToL2 ?  L1_BLOCK_TIME : L2_BLOCK_TIME;
+	const blockTime = isL1ToL2 ? L1_BLOCK_TIME : L2_BLOCK_TIME;
 	const HALF_YEAR_BLOCKS = Math.floor(HALF_YEAR_MS / 1000 / blockTime);
 
 	const provider = isL1ToL2 ? getL1Provider(chainId) : getL2Provider(chainId);
-	const latest = await provider.getBlockNumber();
-	const progress = await loadProgress(userAddress, layer);
+	const [latest, progress] = await Promise.all([
+		provider.getBlockNumber(),
+		loadProgress(userAddress, layer)
+	]);
+
 	const halfYearAgoBlock = Math.max(0, latest - HALF_YEAR_BLOCKS);
 	let current = Math.max(
 			progress.lastBlock + 1,
 			BRIDGE_DEPLOY_BLOCK[chainId] || 0,
 			halfYearAgoBlock
 	);
+	const lastSynced = progress.lastBlock || 0;
+	const syncThreshold = isL1ToL2 ? 5 : 50;
+	if (lastSynced > 0 && (latest - lastSynced) < syncThreshold) {
+		return;
+	}
 
 	const userTopic = ethers.zeroPadValue(userAddress.toLowerCase(), 32);
-
 	// 2. scan
+	const step = 1000000; // 100w block
 	while (current <= latest) {
 		throwIfAborted(signal);
 
-		const step = 1000000; // 100w block
 		const to = Math.min(current + step, latest);
 		try {
-			let rawLogs = await fetchLogsViaAPI(apiUrl, bridgeAddr, BRIDGE_TOPIC, userTopic, current, to);
-			if (rawLogs.length > 0) {
-				const txs = await processBridgeLogs(rawLogs, userAddress, direction);
+			const rawLogs = await fetchLogsViaAPI(apiUrl, bridgeAddr, BRIDGE_TOPIC, userTopic, current, to);
+			if (rawLogs && rawLogs.length > 0) {
+				const txs = processBridgeLogs(rawLogs, userAddress, direction);
 				if (txs.length > 0) {
 					await saveTransactions(txs);
 					if (onChunk) onChunk({ count: txs.length, from: current, to });

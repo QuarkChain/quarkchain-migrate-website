@@ -3,6 +3,7 @@ import store from '@/app/store/index.js';
 import { NETWORKS } from "@/config/networks.js";
 import { ElMessage } from 'element-plus';
 import { startSync, stopSync } from '@/services/history/syncManager.js';
+import { clearProvider } from "@/infra/provider/providerManager.js";
 
 const getL1Id = () => store.state.l1ChainId.toLowerCase();
 const getL2Id = () => store.state.l2ChainId.toLowerCase();
@@ -18,6 +19,7 @@ export function initWalletEvents() {
     });
     window.ethereum.on("chainChanged", async (chainId) => {
         await store.dispatch('setChainId', chainId)
+        clearProvider();
     });
 }
 

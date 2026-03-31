@@ -1,34 +1,35 @@
 import { ethers } from 'ethers'
 import { NETWORKS } from "@/config/networks.js";
 
-export function getL1Provider(targetChainId) {
-	const chainIdNum = Number(targetChainId);
-	const currentWalletChainId = window.ethereum?.chainId;
-	const isWalletMatched = currentWalletChainId && parseInt(currentWalletChainId, 16) === chainIdNum;
+const providerCache = new Map();
 
-	const rpcConfigs = [];
+export function getL1Provider(targetChainId) {
+	const walletChainId = window.ethereum?.chainId;
+	const chainIdNum = Number(targetChainId);
+	const isWalletMatched = walletChainId && parseInt(walletChainId, 16) === chainIdNum;
+
+	const cacheKey = `${targetChainId}-${isWalletMatched}`;
+	if (providerCache.has(cacheKey)) return providerCache.get(cacheKey);
+
 	if (isWalletMatched) {
-		rpcConfigs.push({
-			provider: new ethers.BrowserProvider(window.ethereum),
-			priority: 0,
-			stallTimeout: 3000,
-			weight: 2
-		});
+		const p = new ethers.BrowserProvider(window.ethereum);
+		providerCache.set(cacheKey, p);
+		return p;
 	}
 
+	const rpcConfigs = [];
 	const rpcPool = NETWORKS[targetChainId]?.rpcUrls || [];
 	rpcPool.forEach((url, index) => {
 		rpcConfigs.push({
 			provider: new ethers.JsonRpcProvider(url, chainIdNum, { staticNetwork: true }),
-			priority: index + 1,
-			stallTimeout: 2000 + (index * 1000),
+			priority: index,
+			stallTimeout: 2000,
 		});
 	});
 
-	return new ethers.FallbackProvider(rpcConfigs, parseInt(targetChainId, 16), {
-		quorum: 1,
-		cacheTimeout: 15000
-	});
+	const p = new ethers.FallbackProvider(rpcConfigs, chainIdNum, { quorum: 1 });
+	providerCache.set(cacheKey, p);
+	return p;
 }
 
 export function getL2Provider(targetChainId) {
@@ -36,7 +37,13 @@ export function getL2Provider(targetChainId) {
 	if (rpcPool.length === 0) {
 		throw new Error(`No RPC configuration found for ${targetChainId}`);
 	}
-	return new ethers.JsonRpcProvider(rpcPool[0])
+
+	const cacheKey = `${targetChainId}`;
+	if (providerCache.has(cacheKey)) return providerCache.get(cacheKey);
+
+	const p = new ethers.JsonRpcProvider(rpcPool[0])
+	providerCache.set(cacheKey, p);
+	return p;
 }
 
 export async function getSigner(targetChainId) {
@@ -53,4 +60,8 @@ export async function getSigner(targetChainId) {
 	}
 
 	return await provider.getSigner()
+}
+
+export function clearProvider() {
+	providerCache.clear();
 }
