@@ -6,4 +6,6 @@ export const txList = ref([]);
 export const syncing = ref(false);
 
 export const FINAL_STATUS = [BRIDGE_STATUS.COMPLETED, BRIDGE_STATUS.FAILED];
-export const hasAction = computed(() => txList.value.some(tx => !FINAL_STATUS.includes(tx.status)));
+export const actionCount = computed(() =>
+		txList.value.filter(tx => !FINAL_STATUS.includes(tx.status)).length
+);

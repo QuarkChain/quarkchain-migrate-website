@@ -1,7 +1,7 @@
 <template>
 	<button
 			class="history-btn"
-			:class="{ 'has-action': hasAction }"
+			:class="{ 'has-action': count > 0 }"
 			@click="$emit('click', $event)"
 	>
 		<div class="icon-wrapper">
@@ -17,8 +17,8 @@
 		</div>
 
 		<Transition name="slide-fade">
-			<div v-if="hasAction" class="action-badge">
-				<span class="badge-text">Action needed</span>
+			<div v-if="count > 0" class="action-badge">
+				<span class="badge-text">{{ count }}</span>
 				<div class="spinner-container">
 					<svg viewBox="0 0 66 66" class="spinner">
 						<circle cx="33" cy="33" r="28" fill="none" stroke="currentColor" opacity="0.25" stroke-width="12"></circle>
@@ -32,7 +32,10 @@
 
 <script setup>
 defineProps({
-	hasAction: Boolean
+	count: {
+		type: Number,
+		default: 0
+	}
 });
 defineEmits(['click']);
 </script>

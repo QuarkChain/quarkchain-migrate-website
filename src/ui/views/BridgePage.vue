@@ -2,7 +2,7 @@
 	<div class="bridge-container">
 		<div class="bridge-header">
 			<div></div>
-			<HistoryButton :hasAction="hasAction" @click="handleActionClick"/>
+			<HistoryButton :count="actionCount" @click="handleActionClick"/>
 		</div>
 
 		<el-card class="bridge-card" :class="{ 'is-migration-mode': isMigration }">
@@ -108,7 +108,7 @@ import { Switch, Loading } from '@element-plus/icons-vue'
 import { useStore } from 'vuex';
 import { TOKEN_LIST } from "@/config/tokens.ts";
 import { NETWORKS } from "@/config/networks.js";
-import { hasAction } from "@/app/store/txStore.js";
+import { actionCount } from "@/app/store/txStore.js";
 import { getErc20BalanceByL1, getErc20BalanceByL2, getQKCBalanceByL2 } from "@/services/bridge/balanceService.js";
 import { refreshLocalList } from "@/services/history/syncManager.js";
 import { formatTokenAmount } from "@/infra/uitls/utils.js";
