@@ -41,7 +41,11 @@ export function getL2Provider(targetChainId) {
 	const cacheKey = `${targetChainId}`;
 	if (providerCache.has(cacheKey)) return providerCache.get(cacheKey);
 
-	const p = new ethers.JsonRpcProvider(rpcPool[0])
+	const chainIdNum = Number(targetChainId);
+	const p = new ethers.JsonRpcProvider(rpcPool[0], {
+		chainId: chainIdNum,
+		name: 'l2-network'
+	}, { staticNetwork: true });
 	providerCache.set(cacheKey, p);
 	return p;
 }

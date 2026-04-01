@@ -78,14 +78,14 @@ export async function loadProgress(address, layer) {
 	const db = await getDB();
 	return (
 			await db.get(PROGRESS_STORE, `${address}-${layer}`)
-	) || {lastBlock: 0};
+	) || { lastBlock: 0, lastCount: 0 };
 }
 
-export async function updateProgress(address, layer, block) {
+export async function updateProgress(address, layer, block, count) {
 	const db = await getDB();
 	await db.put(
 			PROGRESS_STORE,
-			{ lastBlock: block },
+			{ lastBlock: block, lastCount: count },
 			`${address}-${layer}`
 	);
 }

@@ -1,9 +1,7 @@
-import pLimit from "p-limit";
 import { ethers } from "ethers";
 import { loadProgress, saveTransactions, updateProgress } from "./db.js";
 import { BRIDGE_DIRECTION, BRIDGE_STATUS, API_CONFIG } from "@/config/constant.js";
 import { getTokenConfig } from "@/config/tokens.ts";
-import { getL1Provider, getL2Provider } from "@/infra/provider/providerManager.js";
 
 
 const BRIDGE_DEPLOY_BLOCK = {
@@ -60,7 +58,7 @@ const isMethod = (txMethod, targetId, targetName) => {
 	return m === targetId.toLowerCase() || m === targetName.toLowerCase();
 };
 
-async function syncConvertTransfers({ layer, chainId, convertAddr, userAddress, opts }) {
+async function syncConvertTransfers({ layer, chainId, convertAddr, userAddress, currentCount, opts }) {
 	const { signal, onChunk } = opts;
 	const apiUrl = API_CONFIG[chainId];
 	if (!apiUrl) return;
@@ -133,7 +131,7 @@ async function syncConvertTransfers({ layer, chainId, convertAddr, userAddress, 
 
 	// update block
 	if (lastProcessedBlock > lastSyncedBlock) {
-		await updateProgress(userAddress, layer, lastProcessedBlock);
+		await updateProgress(userAddress, layer, lastProcessedBlock, currentCount);
 	}
 }
 
@@ -177,7 +175,7 @@ function processBridgeLogs(logs, userAddress, direction) {
 	}).filter(r => r !== null);
 }
 
-async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, direction, opts }) {
+async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, direction, latest, currentCount, opts }) {
 	const { signal, onChunk } = opts;
 	const apiUrl = API_CONFIG[chainId];
 	if (!apiUrl) return;
@@ -186,28 +184,19 @@ async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, directi
 	const isL1ToL2 = direction === BRIDGE_DIRECTION.L1_TO_L2;
 	const blockTime = isL1ToL2 ? L1_BLOCK_TIME : L2_BLOCK_TIME;
 	const HALF_YEAR_BLOCKS = Math.floor(HALF_YEAR_MS / 1000 / blockTime);
-
-	const provider = isL1ToL2 ? getL1Provider(chainId) : getL2Provider(chainId);
-	const [latest, progress] = await Promise.all([
-		provider.getBlockNumber(),
-		loadProgress(userAddress, layer)
-	]);
+	const userTopic = ethers.zeroPadValue(userAddress.toLowerCase(), 32);
 
 	const halfYearAgoBlock = Math.max(0, latest - HALF_YEAR_BLOCKS);
+	const progress = await loadProgress(userAddress, layer);
 	let current = Math.max(
 			progress.lastBlock + 1,
 			BRIDGE_DEPLOY_BLOCK[chainId] || 0,
 			halfYearAgoBlock
 	);
-	const lastSynced = progress.lastBlock || 0;
-	const syncThreshold = isL1ToL2 ? 5 : 50;
-	if (lastSynced > 0 && (latest - lastSynced) < syncThreshold) {
-		return;
-	}
 
-	const userTopic = ethers.zeroPadValue(userAddress.toLowerCase(), 32);
 	// 2. scan
-	const step = 1000000; // 100w block
+	const step = isL1ToL2 ? 500000 : 1000000; // 80w block
+	let isAllSuccess = true;
 	while (current <= latest) {
 		throwIfAborted(signal);
 
@@ -222,45 +211,90 @@ async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, directi
 				}
 			}
 
-			await updateProgress(userAddress, layer, to);
+			await updateProgress(userAddress, layer, to, progress.lastCount);
 			current = to + 1;
 		} catch (e) {
 			console.error("L2 Log Sync Error:", e);
+			isAllSuccess = false;
 			break;
 		}
+	}
+
+	if (isAllSuccess) {
+		await updateProgress(userAddress, layer, latest, currentCount);
 	}
 }
 
 export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, conversion, account, opts = {}) {
 	const { L1StandardBridge, L2StandardBridge } = bridge;
-	await Promise.all([
-		// 1. L1 Bridge (scan Logs)
-		syncBridgeLogs({
-			layer: "L1_BRIDGE",
-			chainId: l1ChainId,
-			bridgeAddr: L1StandardBridge,
-			userAddress: account,
-			direction: BRIDGE_DIRECTION.L1_TO_L2,
-			opts
-		}),
 
-		// 2. L2 Bridge (scan Logs)
-		syncBridgeLogs({
-			layer: "L2_WITHDRAW",
-			chainId: l2ChainId,
-			bridgeAddr: L2StandardBridge,
-			userAddress: account,
-			direction: BRIDGE_DIRECTION.L2_TO_L1,
-			opts
-		}),
-
-		// 3. L1 Convert (Token Transfer API)
-		syncConvertTransfers({
-			layer: "L1_CONVERT",
-			chainId: l1ChainId,
-			convertAddr: conversion,
-			userAddress: account,
-			opts
-		})
+	const [l1Stats, l1Counters, l2Stats, l2Counters] = await Promise.all([
+		fetch(`${API_CONFIG[l1ChainId]}/v2/stats`).then(r => r.json()).catch(() => null),
+		fetch(`${API_CONFIG[l1ChainId]}/v2/addresses/${account}/counters`).then(r => r.json()).catch(() => null),
+		fetch(`${API_CONFIG[l2ChainId]}/v2/stats`).then(r => r.json()).catch(() => null),
+		fetch(`${API_CONFIG[l2ChainId]}/v2/addresses/${account}/counters`).then(r => r.json()).catch(() => null)
 	]);
+	const [pL1Bridge, pL1Convert, pL2Bridge] = await Promise.all([
+		loadProgress(account, "L1_BRIDGE"),
+		loadProgress(account, "L1_CONVERT"),
+		loadProgress(account, "L2_WITHDRAW"),
+	]);
+
+	const tasks = [];
+	// l1
+	if (l1Stats && l1Counters) {
+		const l1Latest = parseInt(l1Stats.total_blocks);
+		const l1Count = parseInt(l1Counters.transactions_count);
+
+		if (l1Count !== pL1Bridge.lastCount) {
+			tasks.push(syncBridgeLogs({
+				layer: "L1_BRIDGE",
+				chainId: l1ChainId,
+				bridgeAddr: L1StandardBridge,
+				userAddress: account,
+				direction: BRIDGE_DIRECTION.L1_TO_L2,
+				latest: l1Latest,
+				currentCount: l1Count,
+				opts
+			}));
+		} else {
+			await updateProgress(account, "L1_BRIDGE", l1Latest, l1Count);
+		}
+
+		if (l1Count !== pL1Convert.lastCount) {
+			tasks.push(syncConvertTransfers({
+				layer: "L1_CONVERT",
+				chainId: l1ChainId,
+				convertAddr: conversion,
+				userAddress: account,
+				currentCount: l1Count,
+				opts
+			}));
+		}
+	}
+
+	// l2
+	if (l2Stats && l2Counters) {
+		const l2Latest = parseInt(l2Stats.total_blocks);
+		const l2Count = parseInt(l2Counters.transactions_count);
+
+		if (l2Count !== pL2Bridge.lastCount) {
+			tasks.push(syncBridgeLogs({
+				layer: "L2_WITHDRAW",
+				chainId: l2ChainId,
+				bridgeAddr: L2StandardBridge,
+				userAddress: account,
+				direction: BRIDGE_DIRECTION.L2_TO_L1,
+				latest: l2Latest,
+				currentCount: l2Count,
+				opts
+			}));
+		} else {
+			await updateProgress(account, "L2_WITHDRAW", l2Latest, l2Count);
+		}
+	}
+
+	if (tasks.length > 0) {
+		await Promise.all(tasks);
+	}
 }
