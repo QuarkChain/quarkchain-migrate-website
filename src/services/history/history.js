@@ -24,6 +24,8 @@ const BRIDGE_TOPIC = ethers.id("ERC20BridgeInitiated(address,address,address,add
 
 const L1_BLOCK_TIME = 12;
 const L2_BLOCK_TIME = 2;
+// retry
+const FETCH_RETRIES = 3;
 
 function throwIfAborted(signal) {
 	if (signal?.aborted) {
@@ -33,20 +35,36 @@ function throwIfAborted(signal) {
 	}
 }
 
+async function fetchWithRetry(url, signal = null) {
+	for (let attempt = 0; attempt < FETCH_RETRIES; attempt++) {
+		try {
+			const res = await fetch(url, { signal });
+			if (!res.ok) throw new Error(`HTTP Error: ${res.status} ${res.statusText}`);
+			return await res.json();
+		} catch (err) {
+			if (err.name === 'AbortError') {
+				throw err;
+			}
+			if (attempt === FETCH_RETRIES - 1) {
+				throw new Error(`Request fail: ${err.message}`);
+			}
+			const delay = 1000 * Math.pow(2, attempt);
+			await new Promise(resolve => setTimeout(resolve, delay));
+		}
+	}
+}
+
+
 // L1 use history
-async function fetchTxPageV2(apiUrl, address, oQKC, nextPageParams = null) {
+async function fetchTxPageV2(apiUrl, address, oQKC, nextPageParams = null, signal) {
 	let url = `${apiUrl}/v2/addresses/${address}/token-transfers?type=ERC-20&token=${oQKC}`;
 
 	if (nextPageParams) {
-		const params = new URLSearchParams();
-		for (const [key, value] of Object.entries(nextPageParams)) {
-			params.append(key, value);
-		}
+		const params = new URLSearchParams(nextPageParams);
 		url = `${url}&${params.toString()}`;
 	}
 
-	const response = await fetch(url);
-	const data = await response.json();
+	const data = await fetchWithRetry(url, signal);
 	return {
 		items: data.items || [],
 		nextPage: data.next_page_params || null
@@ -77,11 +95,11 @@ async function syncConvertTransfers({ layer, chainId, convertAddr, userAddress, 
 	while (hasMore) {
 		throwIfAborted(signal);
 
-		const { items, nextPage } = await fetchTxPageV2(apiUrl, userAddress, oQKC, nextPageParams);
+		const { items, nextPage } = await fetchTxPageV2(apiUrl, userAddress, oQKC, nextPageParams, signal);
 		if (!items || items.length === 0) break;
 
 		if (isFirstPage) {
-			lastProcessedBlock = items[0].block_number;
+			lastProcessedBlock = parseInt(items[0].block_number);
 			isFirstPage = false;
 		}
 
@@ -122,21 +140,18 @@ async function syncConvertTransfers({ layer, chainId, convertAddr, userAddress, 
 		}
 
 		// next page
-		if (hasMore && nextPage) {
-			nextPageParams = nextPage;
-		} else {
-			hasMore = false;
-		}
+		nextPageParams = (hasMore && nextPage) ? nextPage : null;
+		hasMore = !!nextPageParams;
 	}
 
 	// update block
-	if (lastProcessedBlock > lastSyncedBlock) {
+	if (lastProcessedBlock >= lastSyncedBlock) {
 		await updateProgress(userAddress, layer, lastProcessedBlock, currentCount);
 	}
 }
 
 // L2 use logs
-async function fetchLogsViaAPI(apiUrl, address, topic0, topic3, from, to) {
+async function fetchLogsViaAPI(apiUrl, address, topic0, topic3, from, to, signal) {
 	const params = new URLSearchParams({
 		module: 'logs',
 		action: 'getLogs',
@@ -148,8 +163,7 @@ async function fetchLogsViaAPI(apiUrl, address, topic0, topic3, from, to) {
 		topic0_3_opr: 'and'
 	});
 
-	const res = await fetch(`${apiUrl}?${params}`);
-	const data = await res.json();
+	const data = await fetchWithRetry(`${apiUrl}?${params}`, signal);
 	return data.status === "1" ? data.result : [];
 }
 
@@ -195,17 +209,17 @@ async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, directi
 	);
 
 	// 2. scan
-	const step = isL1ToL2 ? 500000 : 1000000; // 80w block
+	const step = isL1ToL2 ? 500000 : 1000000;
 	let isAllSuccess = true;
 	while (current <= latest) {
 		throwIfAborted(signal);
 
 		const to = Math.min(current + step, latest);
 		try {
-			const rawLogs = await fetchLogsViaAPI(apiUrl, bridgeAddr, BRIDGE_TOPIC, userTopic, current, to);
-			if (rawLogs && rawLogs.length > 0) {
+			const rawLogs = await fetchLogsViaAPI(apiUrl, bridgeAddr, BRIDGE_TOPIC, userTopic, current, to, signal);
+			if (rawLogs?.length) {
 				const txs = processBridgeLogs(rawLogs, userAddress, direction);
-				if (txs.length > 0) {
+				if (txs.length) {
 					await saveTransactions(txs);
 					if (onChunk) onChunk({ count: txs.length, from: current, to });
 				}
@@ -214,7 +228,7 @@ async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, directi
 			await updateProgress(userAddress, layer, to, progress.lastCount);
 			current = to + 1;
 		} catch (e) {
-			console.error("L2 Log Sync Error:", e);
+			console.error(`[${layer}] Log Sync Error:`, e);
 			isAllSuccess = false;
 			break;
 		}
@@ -226,13 +240,12 @@ async function syncBridgeLogs({ layer, chainId, bridgeAddr, userAddress, directi
 }
 
 export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, conversion, account, opts = {}) {
-	const { L1StandardBridge, L2StandardBridge } = bridge;
-
+	const { signal } = opts;
 	const [l1Stats, l1Counters, l2Stats, l2Counters] = await Promise.all([
-		fetch(`${API_CONFIG[l1ChainId]}/v2/stats`).then(r => r.json()).catch(() => null),
-		fetch(`${API_CONFIG[l1ChainId]}/v2/addresses/${account}/counters`).then(r => r.json()).catch(() => null),
-		fetch(`${API_CONFIG[l2ChainId]}/v2/stats`).then(r => r.json()).catch(() => null),
-		fetch(`${API_CONFIG[l2ChainId]}/v2/addresses/${account}/counters`).then(r => r.json()).catch(() => null)
+		fetchWithRetry(`${API_CONFIG[l1ChainId]}/v2/stats`, signal).catch(() => null),
+		fetchWithRetry(`${API_CONFIG[l1ChainId]}/v2/addresses/${account}/counters`, signal).catch(() => null),
+		fetchWithRetry(`${API_CONFIG[l2ChainId]}/v2/stats`, signal).catch(() => null),
+		fetchWithRetry(`${API_CONFIG[l2ChainId]}/v2/addresses/${account}/counters`, signal).catch(() => null)
 	]);
 	const [pL1Bridge, pL1Convert, pL2Bridge] = await Promise.all([
 		loadProgress(account, "L1_BRIDGE"),
@@ -240,13 +253,15 @@ export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, convers
 		loadProgress(account, "L2_WITHDRAW"),
 	]);
 
+	const { L1StandardBridge, L2StandardBridge } = bridge;
 	const tasks = [];
 	// l1
 	if (l1Stats && l1Counters) {
-		const l1Latest = parseInt(l1Stats.total_blocks);
-		const l1Count = parseInt(l1Counters.transactions_count);
+		const l1Latest = parseInt(l1Stats.total_blocks) || 0;
+		const l1Count = parseInt(l1Counters.transactions_count) || 0;
 
-		if (l1Count !== pL1Bridge.lastCount) {
+		// L1 Bridge
+		if (l1Count !== pL1Bridge?.lastCount) {
 			tasks.push(syncBridgeLogs({
 				layer: "L1_BRIDGE",
 				chainId: l1ChainId,
@@ -261,7 +276,8 @@ export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, convers
 			await updateProgress(account, "L1_BRIDGE", l1Latest, l1Count);
 		}
 
-		if (l1Count !== pL1Convert.lastCount) {
+		// L1 Convert
+		if (l1Count !== pL1Convert?.lastCount) {
 			tasks.push(syncConvertTransfers({
 				layer: "L1_CONVERT",
 				chainId: l1ChainId,
@@ -275,10 +291,10 @@ export async function syncUserTransactions(l1ChainId, l2ChainId, bridge, convers
 
 	// l2
 	if (l2Stats && l2Counters) {
-		const l2Latest = parseInt(l2Stats.total_blocks);
-		const l2Count = parseInt(l2Counters.transactions_count);
+		const l2Latest = parseInt(l2Stats.total_blocks) || 0;
+		const l2Count = parseInt(l2Counters.transactions_count) || 0;
 
-		if (l2Count !== pL2Bridge.lastCount) {
+		if (l2Count !== pL2Bridge?.lastCount) {
 			tasks.push(syncBridgeLogs({
 				layer: "L2_WITHDRAW",
 				chainId: l2ChainId,
