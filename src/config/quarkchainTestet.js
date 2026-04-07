@@ -33,8 +33,8 @@ export const quarkchainL2Testnet = /*#__PURE__*/ defineChain({
 			},
 		},
 		multicall3: {
-			address: '0xca11bde05977b3631167028862be2a173976ca11',
-			blockCreated: 1620204,
+			address: '0xb6379C2ff60093661eC921b2e08716faFB2E8818',
+			blockCreated: 5739913,
 		},
 		portal: {
 			[sourceId]: {

@@ -24,26 +24,26 @@ export const quarkchainL2 = /*#__PURE__*/ defineChain({
 		...chainConfig.contracts,
 		disputeGameFactory: {
 			[sourceId]: {
-				address: '0x05F9613aDB30026FFd634f38e5C4dFd30a197Fa1',
+				address: '0x61870a40eaa988515060e91e39da9c4a690b5c9b',
 			},
 		},
 		l2OutputOracle: {
 			[sourceId]: {
-				address: '0x90E9c4f8a994a250F6aEfd61CAFb4F2e895D458F',
+				address: '0x0000000000000000000000000000000000000000',
 			},
 		},
 		multicall3: {
-			address: '0xca11bde05977b3631167028862be2a173976ca11',
-			blockCreated: 1620204,
+			address: '0x5FBDaD3AE3C5Af36d7c09455E1123e3a8DbDF5e5',
+			blockCreated: 5136157,
 		},
 		portal: {
 			[sourceId]: {
-				address: '0x16Fc5058F25648194471939df75CF27A2fdC48BC',
+				address: '0xf9ea3f50acbacb122bfb9ceb6cf79c6cfcf35c7a',
 			},
 		},
 		l1StandardBridge: {
 			[sourceId]: {
-				address: '0xFBb0621E0B23b5478B630BD55a5f21f67730B0F1',
+				address: '0x326798c62fc0d7281f3840e08226a671aa949e98',
 			},
 		},
 	},
